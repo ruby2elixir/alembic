@@ -4,6 +4,24 @@ defmodule Alembic.Source do
   """
 
   alias Alembic
+  alias Alembic.Document
+  alias Alembic.Error
+  alias Alembic.FromJson
+
+  # Behaviours
+
+  @behaviour FromJson
+
+  # Constants
+
+  @parameter_options %{
+                       field: :parameter,
+                       member: %{
+                         from_json: &FromJson.string_from_json/2
+                       }
+                     }
+
+  # Struct
 
   defstruct [:parameter, :pointer]
 
@@ -21,4 +39,198 @@ defmodule Alembic.Source do
                parameter: String.t,
                pointer: Api.json_pointer
              }
+
+  @doc """
+  Descends `pointer` to `child` of current `pointer`
+
+      iex> Alembic.Source.descend(
+      ...>   %Alembic.Source{
+      ...>     pointer: "/data"
+      ...>   },
+      ...>   1
+      ...> )
+      %Alembic.Source{
+        pointer: "/data/1"
+      }
+
+  """
+  @spec descend(t, String.t | integer) :: t
+  def descend(source = %__MODULE__{pointer: pointer}, child) do
+    %__MODULE__{source | pointer: "#{pointer}/#{child}"}
+  end
+
+  @doc """
+  Converts JSON object to `t`.
+
+  ## Valid Input
+
+  A parameter can be the source of an error
+
+      iex> Alembic.Source.from_json(
+      ...>   %{
+      ...>     "parameter" => "q",
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/errors/0/source"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :ok,
+        %Alembic.Source{
+          parameter: "q"
+        }
+      }
+
+  A member of a JSON object can be the source of an error, in which case a pointer to the location in the object will
+  be given
+
+      iex> Alembic.Source.from_json(
+      ...>   %{
+      ...>     "pointer" => "/data"
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/errors/0/source"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :ok,
+        %Alembic.Source{
+          pointer: "/data"
+        }
+      }
+
+  ## Invalid Input
+
+  It is assumed that only `"parameter"` or `"pointer"` can be set in a single error source (although that's not
+  explicit in the JSON API specification), so setting both is an error
+
+      iex> Alembic.Source.from_json(
+      ...>   %{
+      ...>     "parameter" => "q",
+      ...>     "pointer" => "/data"
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/errors/0/source"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :error,
+        %Alembic.Document{
+          errors: [
+            %Alembic.Error{
+              detail: "The following members conflict with each other (only one can be present):\\nparameter\\npointer",
+              meta: %{
+                "children" => [
+                  "parameter",
+                  "pointer"
+                ]
+              },
+              source: %Alembic.Source{
+                pointer: "/errors/0/source"
+              },
+              status: "422",
+              title: "Children conflicting"
+            }
+          ]
+        }
+      }
+
+  A parameter **MUST** be a string
+
+      iex> Alembic.Source.from_json(
+      ...>   %{
+      ...>     "parameter" => true,
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/errors/0/source"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :error,
+        %Alembic.Document{
+          errors: [
+            %Alembic.Error{
+              detail: "`/errors/0/source/parameter` type is not string",
+              meta: %{
+                "type" => "string"
+              },
+              source: %Alembic.Source{
+                pointer: "/errors/0/source/parameter"
+              },
+              status: "422",
+              title: "Type is wrong"
+            }
+          ]
+        }
+      }
+
+  A pointer **MUST** be a string
+
+      iex> Alembic.Source.from_json(
+      ...>   %{
+      ...>     "pointer" => ["data"],
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/errors/0/source"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :error,
+        %Alembic.Document{
+          errors: [
+            %Alembic.Error{
+              detail: "`/errors/0/source/pointer` type is not string",
+              meta: %{
+                "type" => "string"
+              },
+              source: %Alembic.Source{
+                pointer: "/errors/0/source/pointer"
+              },
+              status: "422",
+              title: "Type is wrong"
+            }
+          ]
+        }
+      }
+
+  """
+  @spec from_json(%{String.t => String.t}, Error.t) :: FromJson.error
+  def from_json(json, error_template)
+
+  def from_json(%{"parameter" => _, "pointer" => _}, error_template) do
+    {
+      :error,
+      %Document{
+        errors: [
+          Error.conflicting(error_template, ~w{parameter pointer})
+        ]
+      }
+    }
+  end
+
+  def from_json(%{"parameter" => parameter}, error_template) do
+    field_result = parameter
+                   |> FromJson.string_from_json(Error.descend(error_template, "parameter"))
+                   |> FromJson.put_key(:parameter)
+
+    FromJson.merge({:ok, %__MODULE__{}}, field_result)
+  end
+
+  def from_json(%{"pointer" => pointer}, error_template) do
+    field_result = pointer
+                   |> FromJson.string_from_json(Error.descend(error_template, "pointer"))
+                   |> FromJson.put_key(:pointer)
+
+    FromJson.merge({:ok, %__MODULE__{}}, field_result)
+  end
 end
