@@ -233,4 +233,39 @@ defmodule Alembic.Source do
 
     FromJson.merge({:ok, %__MODULE__{}}, field_result)
   end
+
+  defimpl Poison.Encoder do
+    @doc """
+    Encoded `Alembic.Source.t` as a `String.t` contain a JSON object with either a `"parameter"` or `"pointer"` member.
+    Whichever field is `nil` in the `Alembic.Source.t` does not appear in the output.
+
+    If `parameter` is set in the `Alembic.Source.t`, then the encoded JSON will only have "parameter"
+
+        iex> Poison.encode(
+        ...>   %Alembic.Source{
+        ...>     parameter: "q"
+        ...>   }
+        ...> )
+        {:ok, "{\\"parameter\\":\\"q\\"}"}
+
+    If `pointer` is set in the `Alembic.Source.t`, then the encoded JSON will only have "pointer"
+
+        iex> Poison.encode(
+        ...>   %Alembic.Source{
+        ...>     pointer: "/data"
+        ...>   }
+        ...> )
+        {:ok, "{\\"pointer\\":\\"/data\\"}"}
+
+    """
+    @spec encode(@for.t, Keyword.t) :: String.t
+
+    def encode(%@for{parameter: parameter, pointer: nil}, options) when is_binary(parameter) do
+      Poison.Encoder.Map.encode(%{"parameter" => parameter}, options)
+    end
+
+    def encode(%@for{parameter: nil, pointer: pointer}, options) when is_binary(pointer) do
+      Poison.Encoder.Map.encode(%{"pointer" => pointer}, options)
+    end
+  end
 end

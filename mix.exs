@@ -19,7 +19,7 @@ defmodule Alembic.Mixfile do
   #
   # Type "mix help compile.app" for more information
   def application do
-    [applications: [:logger]]
+    [applications: [:logger, :poison]]
   end
 
   # Dependencies can be Hex packages:
@@ -46,7 +46,9 @@ defmodule Alembic.Mixfile do
       # documentation coverage
       {:inch_ex, "~> 0.5.1", only: [:dev, :test]},
       # formats test output for CircleCI
-      {:junit_formatter, "~> 1.0", only: :test}
+      {:junit_formatter, "~> 1.0", only: :test},
+      # JSON decode and encoding.  Protocols are implemented for Alembic.* structs
+      {:poison, "~> 2.1"}
     ]
   end
 end

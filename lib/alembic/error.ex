@@ -420,4 +420,105 @@ defmodule Alembic.Error do
       title: "Type is wrong"
     }
   end
+
+  defimpl Poison.Encoder do
+    @doc """
+    Encoded `Alembic.Error.t` as a `String.t` contain a JSON objecct where the `nil` fields from `Alembic.Error.t`
+    **DO NOT** appear.
+
+    An error can have only a code
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     code: "123"
+        ...>   }
+        ...> )
+        {:ok, "{\\"code\\":\\"123\\"}"}
+
+    An error can have only a detail
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     detail: "`/data` type is not object"
+        ...>   }
+        ...> )
+        {:ok, "{\\"detail\\":\\"`/data` type is not object\\"}"}
+
+    An error can have only an id
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     id: "1"
+        ...>   }
+        ...> )
+        {:ok, "{\\"id\\":\\"1\\"}"}
+
+    An error can have only links
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     links: %{
+        ...>       "object" => %Alembic.Link{
+        ...>         href: "http://example.com",
+        ...>         meta: %{
+        ...>           "extra" => "link object"
+        ...>         }
+        ...>       },
+        ...>       "url" => "http://example.com"
+        ...>     }
+        ...>   }
+        ...> )
+        {
+          :ok,
+          "{\\"links\\":{\\"url\\":\\"http://example.com\\",\\"object\\":{\\"meta\\":{\\"extra\\":" <>
+          "\\"link object\\"},\\"href\\":\\"http://example.com\\"}}}"
+        }
+
+    An error can have only meta
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     meta: %{
+        ...>       "extra" => "stuff"
+        ...>     }
+        ...>   }
+        ...> )
+        {:ok, "{\\"meta\\":{\\"extra\\":\\"stuff\\"}}"}
+
+    An error can have only a source
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     source: %Alembic.Source{
+        ...>       pointer: "/data"
+        ...>     }
+        ...>   }
+        ...> )
+        {:ok, "{\\"source\\":{\\"pointer\\":\\"/data\\"}}"}
+
+    An error can have only status
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     status: "422"
+        ...>   }
+        ...> )
+        {:ok, "{\\"status\\":\\"422\\"}"}
+
+    An error can have only title
+
+        iex> Poison.encode(
+        ...>   %Alembic.Error{
+        ...>     title: "`/errors` type is not array"
+        ...>   }
+        ...> )
+        {:ok, "{\\"title\\":\\"`/errors` type is not array\\"}"}
+
+    """
+    def encode(error = %@for{}, options) do
+       map = for {field, value} <- Map.from_struct(error), value != nil, into: %{}, do: {field, value}
+
+       Poison.Encoder.Map.encode(map, options)
+    end
+  end
 end

@@ -5,5 +5,24 @@ defmodule Alembic.DocumentTest do
 
   use ExUnit.Case, async: true
 
-  doctest Alembic.Document
+  alias Alembic.Document
+  alias Alembic.Error
+  alias Alembic.FromJsonTest
+  alias Alembic.Source
+
+  doctest Document
+
+  test "Poison.encode -> Poison.decode -> from_json/2 is idempotent for errors document" do
+    error_template = %Error{
+      source: %Source{
+        pointer: ""
+      }
+    }
+
+    {:error, response} = Document.from_json(%{}, error_template)
+
+    FromJsonTest.assert_idempotent error_template: error_template,
+                                   module: Document,
+                                   original: response
+  end
 end
