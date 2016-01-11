@@ -269,6 +269,54 @@ defmodule Alembic.Error do
   end
 
   @doc """
+  When the minimum number of children are not present, give the sender a list of the children they could have sent.
+
+      iex> Alembic.Error.minimum_children(
+      ...>   %Alembic.Error{
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/data/relationships/author"
+      ...>     }
+      ...>   },
+      ...>   ~w{data links meta}
+      ...> )
+      %Alembic.Error{
+        detail: "At least one of the following children of `/data/relationships/author` must be present:\\n" <>
+                "data\\n" <>
+                "links\\n" <>
+                "meta",
+        meta: %{
+          "children" => [
+            "data",
+            "links",
+            "meta"
+          ]
+        },
+        source: %Alembic.Source{
+          pointer: "/data/relationships/author"
+        },
+        status: "422",
+        title: "Not enough children"
+      }
+
+  """
+  @spec minimum_children(t, [String.t]) :: t
+  def minimum_children(template, children)
+
+  def minimum_children(%__MODULE__{source: source = %Source{pointer: parent_pointer}},
+                       children) when is_list(children) do
+    %__MODULE__{
+      detail: "At least one of the following children of `#{parent_pointer}` must be present:\n" <>
+              Enum.join(children, "\n"),
+      meta: %{
+        "children" => children
+      },
+      source: source,
+      status: "422",
+      title: "Not enough children"
+    }
+  end
+
+  @doc """
   When a required (**MUST** in the spec) member is missing
 
   # Top-level member is missing
