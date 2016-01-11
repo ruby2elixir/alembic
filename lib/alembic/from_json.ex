@@ -77,7 +77,7 @@ defmodule Alembic.FromJson do
   @typedoc """
   A single value that can be merged into a `collective_value`.
   """
-  @type singleton_value :: map | nil | String.t | struct
+  @type singleton_value :: [struct] | map | nil | String.t | struct
 
   # Callbacks
 
