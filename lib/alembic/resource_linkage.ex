@@ -19,6 +19,7 @@ defmodule Alembic.ResourceLinkage do
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson
+  alias Alembic.Resource
   alias Alembic.ResourceIdentifier
 
   @behaviour FromJson
@@ -34,7 +35,84 @@ defmodule Alembic.ResourceLinkage do
 
   ## To-one
 
-  A to-one resource linkage, when present, will be a single `Alembic.ResourceIdentifier.t`
+  A to-one resource linkage, when present, can be a single `Alembic.Resource.t` or
+  `Alembic.ResourceIdentifier.t`
+
+  A JSON object is assumed to be an resource object if it has `"attributes"`
+
+      iex> Alembic.ResourceLinkage.from_json(
+      ...>   %{
+      ...>     "attributes" => %{
+      ...>       "name" => "Alice"
+      ...>     },
+      ...>     "id" => "1",
+      ...>     "type" => "author"
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :create,
+      ...>       "sender" => :client
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/data/relationships/author/data"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :ok,
+        %Alembic.Resource{
+          attributes: %{
+            "name" => "Alice"
+          },
+          id: "1",
+          type: "author"
+        }
+      }
+
+  Or if the JSON object has `"relationships"`
+
+      iex> Alembic.ResourceLinkage.from_json(
+      ...>   %{
+      ...>     "id" => "1",
+      ...>     "relationships" => %{
+      ...>       "author" => %{
+      ...>         "data" => %{
+      ...>           "id" => "1",
+      ...>           "type" => "author"
+      ...>         }
+      ...>       }
+      ...>     },
+      ...>     "type" => "post"
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :create,
+      ...>       "sender" => :client
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/data"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :ok,
+        %Alembic.Resource{
+          id: "1",
+          relationships: %{
+            "author" => %Alembic.Relationship{
+              data: %Alembic.ResourceIdentifier{
+                id: "1",
+                meta: nil,
+                type: "author"
+              }
+            }
+          },
+          type: "post"
+        }
+      }
+
+  If neither `"attributes"` nor `"relationships"` is present, then JSON object is assumed to be an
+  `Alembic.ResourceIdentifier.t`.
 
       iex> Alembic.ResourceLinkage.from_json(
       ...>   %{
@@ -55,6 +133,7 @@ defmodule Alembic.ResourceLinkage do
         }
       }
 
+
   An empty to-one resource linkage can be signified with `nil`, which would have been `null` in the original JSON.
 
       iex> Alembic.ResourceLinkage.from_json(
@@ -69,18 +148,74 @@ defmodule Alembic.ResourceLinkage do
 
   ## To-many
 
-  A to-many resource linkage, when preent, will be a list of `Alembic.ResourceIdentifier.t`
+  A to-many resource linkage, when present, can be a list of `Alembic.Resource.t`.
+
+      iex> Alembic.ResourceLinkage.from_json(
+      ...>   [
+      ...>     %{
+      ...>       "attributes" => %{
+      ...>         "text" => "First Post!"
+      ...>       },
+      ...>       "id" => "1",
+      ...>       "relationships" => %{
+      ...>         "comments" => %{
+      ...>           "data" => [
+      ...>             %{
+      ...>               "id" => "1",
+      ...>               "type" => "comment"
+      ...>             }
+      ...>           ]
+      ...>         }
+      ...>       },
+      ...>       "type" => "post"
+      ...>     }
+      ...>   ],
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :create,
+      ...>       "sender" => :client
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/data"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :ok,
+        [
+          %Alembic.Resource{
+            attributes: %{
+              "text" => "First Post!"
+            },
+            id: "1",
+            links: nil,
+            relationships: %{
+              "comments" => %Alembic.Relationship{
+                data: [
+                  %Alembic.ResourceIdentifier{
+                    id: "1",
+                    type: "comment"
+                  }
+                ]
+              }
+            },
+            type: "post"
+          }
+        ]
+      }
+
+  Or a list of `Alembic.ResourceIdentifier.t`.
 
       iex> Alembic.ResourceLinkage.from_json(
       ...>   [
       ...>     %{
       ...>       "id" => "1",
-      ...>       "type" => "comment"
+      ...>       "type" => "post"
       ...>     }
       ...>   ],
       ...>   %Alembic.Error{
       ...>     source: %Alembic.Source{
-      ...>       pointer: "/data/relationships/comments/data"
+      ...>       pointer: "/data"
       ...>     }
       ...>   }
       ...> )
@@ -89,9 +224,54 @@ defmodule Alembic.ResourceLinkage do
         [
           %Alembic.ResourceIdentifier{
             id: "1",
-            type: "comment"
+            type: "post"
           }
         ]
+      }
+
+  A mix of resources and resource identifiers is an error
+
+      iex> Alembic.ResourceLinkage.from_json(
+      ...>   [
+      ...>     %{
+      ...>       "attributes" => %{
+      ...>         "text" => "First Post!"
+      ...>       },
+      ...>       "id" => "1",
+      ...>       "type" => "post"
+      ...>     },
+      ...>     %{
+      ...>       "id" => "2",
+      ...>       "type" => "post"
+      ...>     }
+      ...>   ],
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :create,
+      ...>       "sender" => :client
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: "/data"
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :error,
+        %Alembic.Document{
+          errors: [
+            %Alembic.Error{
+              detail: "`/data` type is not resource linkage",
+              meta: %{
+                "type" => "resource linkage"
+              },
+              source: %Alembic.Source{
+                pointer: "/data"
+              },
+              status: "422",
+              title: "Type is wrong"
+            }
+          ]
+        }
       }
 
   An empty to-many resource linkage can be signified with `[]`.
@@ -146,19 +326,55 @@ defmodule Alembic.ResourceLinkage do
   @spec from_json([], Error.t) :: {:ok, []}
   def from_json([], _), do: {:ok, []}
 
-  @spec from_json(Alembic.json_object, Error.t) :: {:ok, ResourceIdentifier.t} | FromJson.error
-  def from_json(resource_identifier_json, error_template) when is_map(resource_identifier_json) do
-    ResourceIdentifier.from_json(resource_identifier_json, error_template)
+  @spec from_json(Alembic.json_object, Error.t) :: {:ok, Resource.t | ResourceIdentifier.t} | FromJson.error
+  def from_json(json_object, error_template) when is_map(json_object) do
+    resource_or_resource_identifier_from_json(json_object, error_template)
   end
 
-  @spec from_json([Alembic.json_object, ...], Error.t) :: {:ok, [ResourceIdentifier.t]} | FromJson.error
-  def from_json(resource_identifiers_json, error_template) when is_list(resource_identifiers_json) do
-    FromJson.from_json_array(resource_identifiers_json, error_template, ResourceIdentifier)
+  @spec from_json([Alembic.json_object, ...], Error.t) :: {:ok, [Resource.t | ResourceIdentifier.t]} | FromJson.error
+  def from_json(json_array, error_template) when is_list(json_array) do
+    json_array
+    |> FromJson.from_json_array(error_template, &resource_or_resource_identifier_from_json/2)
+    |> validate_consistent_types(error_template)
   end
 
   # Alembic.json -- [nil, [], Alembic.json_object, [Alembic.json_object]]
   @spec from_json(true | false | float | integer, Error.t) :: FromJson.error
-  def from_json(_, error_template) do
+  def from_json(_, error_template), do: type_error(error_template)
+
+  ## Private Functions
+
+  defp consistent_types?(list) when is_list(list) do
+    list
+    |> Enum.into(MapSet.new, fn element ->
+          element.__struct__
+       end)
+    |> MapSet.size == 1
+  end
+
+  defp resource_or_resource_identifier_from_json(json = %{"attributes" => _}, error_template) do
+    Resource.from_json(json, error_template)
+  end
+
+  defp resource_or_resource_identifier_from_json(json = %{"relationships" => _}, error_template) do
+    Resource.from_json(json, error_template)
+  end
+
+  defp resource_or_resource_identifier_from_json(json, error_template) do
+    ResourceIdentifier.from_json(json, error_template)
+  end
+
+  defp validate_consistent_types(collectable_result = {:error, _}, _), do: collectable_result
+
+  defp validate_consistent_types(collectable_result = {:ok, list}, error_template) when is_list(list) do
+    if consistent_types?(list) do
+      collectable_result
+    else
+      type_error(error_template)
+    end
+  end
+
+  defp type_error(error_template) do
     {
       :error,
       %Document{
