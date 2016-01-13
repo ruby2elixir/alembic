@@ -7,7 +7,7 @@ defmodule Alembic.DocumentTest do
 
   alias Alembic.Document
   alias Alembic.Error
-  alias Alembic.FromJsonTest
+  alias Alembic.FromJsonCase
   alias Alembic.Source
 
   doctest Document
@@ -21,7 +21,7 @@ defmodule Alembic.DocumentTest do
 
     {:error, response} = Document.from_json(%{}, error_template)
 
-    FromJsonTest.assert_idempotent error_template: error_template,
+    FromJsonCase.assert_idempotent error_template: error_template,
                                    module: Document,
                                    original: response
   end

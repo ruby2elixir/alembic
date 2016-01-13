@@ -1,12 +1,22 @@
 defmodule Alembic.Mixfile do
   use Mix.Project
 
+  # Functions
+
+  # Configuration for the OTP application
+  #
+  # Type "mix help compile.app" for more information
+  def application do
+    [applications: [:logger, :poison]]
+  end
+
   def project do
     [
       app: :alembic,
       build_embedded: Mix.env == :prod,
       deps: deps,
       elixir: "~> 1.2",
+      elixirc_paths: elixirc_paths(Mix.env),
       name: "Alembic",
       source_url: "https://github.com/C-S-D/alembic",
       start_permanent: Mix.env == :prod,
@@ -15,12 +25,7 @@ defmodule Alembic.Mixfile do
     ]
   end
 
-  # Configuration for the OTP application
-  #
-  # Type "mix help compile.app" for more information
-  def application do
-    [applications: [:logger, :poison]]
-  end
+  ## Private Functions
 
   # Dependencies can be Hex packages:
   #
@@ -51,4 +56,7 @@ defmodule Alembic.Mixfile do
       {:poison, "~> 2.1"}
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_),     do: ["lib"]
 end
