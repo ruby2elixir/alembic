@@ -3,12 +3,16 @@ defmodule Alembic.ResourceIdentifier do
   A [JSON API Resource Identifier](http://jsonapi.org/format/#document-resource-identifier-objects).
   """
 
+  alias Alembic
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson
   alias Alembic.Meta
+  alias Alembic.Resource
+  alias Alembic.ToParams
 
   @behaviour FromJson
+  @behaviour ToParams
 
   # Constants
 
@@ -248,5 +252,55 @@ defmodule Alembic.ResourceIdentifier do
         ]
       }
     }
+  end
+
+  @doc """
+  Converts `resource_identifier` to params format used by
+  [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4).
+
+  `id` and `type` will be used to lookup the attributes in `resource_by_id_by_type`.  Theses attributes and the id
+  will be combined into a map for params
+
+      iex> Alembic.ResourceIdentifier.to_params(
+      ...>   %Alembic.ResourceIdentifier{id: "1", type: "author"},
+      ...>   %{
+      ...>     "author" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "author",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "name" => "Alice"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   }
+      ...> )
+      %{
+        "id" => "1",
+        "name" => "Alice"
+      }
+
+  If no entry is found in `resource_by_id_by_type`, then only the `id` is copied to the params.  This can happen when
+  the server only wants to send foreign keys.
+
+      iex> Alembic.ResourceIdentifier.to_params(
+      ...>   %Alembic.ResourceIdentifier{id: "1", type: "author"},
+      ...>   %{}
+      ...> )
+      %{
+        "id" => "1"
+      }
+
+  """
+  @spec to_params(t, ToParams.resource_by_id_by_type) :: ToParams.params
+  def to_params(%__MODULE__{id: id, type: type}, resource_by_id_by_type) do
+    attributes = case get_in(resource_by_id_by_type, [type, id]) do
+      %Resource{type: ^type, id: ^id, attributes: resource_attributes} ->
+        resource_attributes
+      nil ->
+        %{}
+    end
+
+    Map.put(attributes, "id", id)
   end
 end

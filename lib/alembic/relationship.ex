@@ -11,14 +11,17 @@ defmodule Alembic.Relationship do
   > </cite>
   """
 
+  alias Alembic
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson
   alias Alembic.Links
   alias Alembic.Meta
   alias Alembic.ResourceLinkage
+  alias Alembic.ToParams
 
   @behaviour FromJson
+  @behaviour ToParams
 
   # Constants
 
@@ -377,5 +380,126 @@ defmodule Alembic.Relationship do
         ]
       }
     }
+  end
+
+  @doc """
+  Converts `t` to params format used by [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4).
+
+  ## To-one
+
+  An empty to-one, `nil`, is `nil` when converted to params.
+
+      iex> Alembic.Relationship.to_params(%Alembic.Relationship{data: nil}, %{})
+      nil
+
+  A resource identifier uses `resource_by_id_by_type` to fill in the attributes of the referenced resource. `type` is
+  dropped as [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4) doesn't verify types in the
+  params.
+
+      iex> Alembic.Relationship.to_params(
+      ...>   %Alembic.Relationship{
+      ...>     data: %Alembic.ResourceIdentifier{
+      ...>       id: "1", type: "shirt"
+      ...>     }
+      ...>   },
+      ...>   %{
+      ...>     "shirt" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "shirt",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "size" => "L"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   }
+      ...> )
+      %{
+        "id" => "1",
+        "size" => "L"
+      }
+
+  On create or update, a relationship can be created by having an `Alembic.Resource.t`, in which case the
+  attributes are supplied by the `Alembic.Resource.t`, instead of `resource_by_id_by_type`.
+
+      iex> Alembic.Relationship.to_params(
+      ...>   %Alembic.Relationship{
+      ...>     data: %Alembic.Resource{
+      ...>       attributes: %{
+      ...>         "size" => "L"
+      ...>       },
+      ...>       type: "shirt"
+      ...>     }
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "size" => "L"
+      }
+
+  ## To-many
+
+  An empty to-many, `[]`, is `[]` when converted to params
+
+      iex> Alembic.Relationship.to_params(%Alembic.Relationship{data: []}, %{})
+      []
+
+  A list of resource identifiers uses `resource_by_id_by_type` to fill in the attributes of the referenced resources.
+  `type` is dropped as [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4) doesn't verify types
+  in the params.
+
+      iex> Alembic.Relationship.to_params(
+      ...>   %Alembic.Relationship{
+      ...>     data: [
+      ...>       %Alembic.ResourceIdentifier{
+      ...>         id: "1", type: "shirt"
+      ...>       }
+      ...>     ]
+      ...>   },
+      ...>   %{
+      ...>     "shirt" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "shirt",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "size" => "L"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>  }
+      ...> )
+      [
+        %{
+          "id" => "1",
+          "size" => "L"
+        }
+      ]
+
+  On create or update, a relationship can be created by having an `Alembic.Resource.t`, in which case the
+  attributes are supplied by the `Alembic.Resource`, instead of `resource_by_id_by_type`.
+
+      iex> Alembic.Relationship.to_params(
+      ...>   %Alembic.Relationship{
+      ...>     data: [
+      ...>       %Alembic.Resource{
+      ...>         attributes: %{
+      ...>           "size" => "L"
+      ...>         },
+      ...>         type: "shirt"
+      ...>       }
+      ...>     ]
+      ...>   },
+      ...>   %{}
+      ...> )
+      [
+        %{
+          "size" => "L"
+        }
+      ]
+
+  """
+  @spec to_params(%__MODULE__{data: any}, ToParams.resource_by_id_by_type) :: ToParams.params
+  def to_params(%__MODULE__{data: data}, resource_by_id_by_type) do
+    ResourceLinkage.to_params(data, resource_by_id_by_type)
   end
 end

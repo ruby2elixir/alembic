@@ -12,8 +12,10 @@ defmodule Alembic.Resource do
   alias Alembic.Links
   alias Alembic.Meta
   alias Alembic.Relationships
+  alias Alembic.ToParams
 
   @behaviour FromJson
+  @behaviour ToParams
 
   # Constants
 
@@ -90,6 +92,17 @@ defmodule Alembic.Resource do
   # Types
 
   @typedoc """
+  The ID of a `Resource.t`.  Usually the primary key or UUID for a resource in the server.
+  """
+  @type id :: String.t
+
+  @typedoc """
+  The type of a `Resource.t`.  Can be either singular or pluralized, althought the JSON API spec examples favor
+  pluralized.
+  """
+  @type type :: String.t
+
+  @typedoc """
   Resource objects" appear in a JSON API document to represent resources.
 
   A resource object **MUST** contain at least the following top-level members:
@@ -112,11 +125,11 @@ defmodule Alembic.Resource do
   """
   @type t :: %__MODULE__{
                attributes: Alembic.json_object | nil,
-               id: String.t | nil,
+               id: id | nil,
                links: Links.t | nil,
                meta: Meta.t | nil,
                relationships: Relationships.t | nil,
-               type: String.t
+               type: type
              }
 
   # Functions
@@ -802,6 +815,75 @@ defmodule Alembic.Resource do
         ]
       }
     }
+  end
+
+  @doc """
+  Converts `resource` to params format used by
+  [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4).
+  The `id` and `attributes` are combined into a single map for params.
+
+      iex> Alembic.Resource.to_params(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{"text" => "First!"},
+      ...>     id: "1",
+      ...>     type: "post"
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "id" => "1",
+        "text" => "First!"
+      }
+
+  But, `id` won't show up as "id" in params if it is `nil`
+
+      iex> Alembic.Resource.to_params(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{"text" => "First!"},
+      ...>     type: "post"
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "text" => "First!"
+      }
+
+  ## Relationships
+
+  Relationships's params are merged into the `resource`'s params
+
+      iex> Alembic.Resource.to_params(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{"text" => "First!"},
+      ...>     relationships: %{
+      ...>       "author" => %Alembic.Relationship{
+      ...>         data: %Alembic.ResourceIdentifier{id: 1, type: "author"}
+      ...>       }
+      ...>     },
+      ...>     type: "post"
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "text" => "First!",
+        "author" => %{
+          "id" => 1
+        }
+      }
+  """
+  @spec to_params(t, ToParams.resource_by_id_by_type) :: ToParams.params
+  def to_params(resource, attributes_by_id_by_type)
+
+  def to_params(%__MODULE__{attributes: attributes, id: id, relationships: relationships},
+                resource_by_id_by_type = %{}) do
+    params = case id do
+      nil ->
+        attributes
+      _ ->
+        Map.put(attributes, "id", id)
+    end
+
+    Map.merge(params, Relationships.to_params(relationships, resource_by_id_by_type))
   end
 
   ## Private Functions

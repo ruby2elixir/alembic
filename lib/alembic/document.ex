@@ -3,16 +3,19 @@ defmodule Alembic.Document do
   JSON API refers to the top-level JSON structure as a [document](http://jsonapi.org/format/#document-structure).
   """
 
+  alias Alembic
   alias Alembic.Error
   alias Alembic.FromJson
   alias Alembic.Links
   alias Alembic.Meta
   alias Alembic.Resource
   alias Alembic.ResourceLinkage
+  alias Alembic.ToParams
 
   # Behaviours
 
   @behaviour FromJson
+  @behaviour ToParams
 
   # Constants
 
@@ -620,6 +623,184 @@ defmodule Alembic.Document do
   end
 
   @doc """
+  Lookup table of `included` resources, so that `Alembic.ResourceIdentifier.t` can be
+  converted to full `Alembic.Resource.t`.
+
+  ## No included resources
+
+  With no included resources, an empty map is returned
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => %{
+      ...>       "type" => "post",
+      ...>       "id" => "1"
+      ...>     }
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      ...> Alembic.Document.included_resource_by_id_by_type(document)
+      %{}
+
+  ## Included resources
+
+  With included resources, a nest map is built with the outer layer keyed by the `Alembic.Resource.type`,
+  then the next layer keyed by the `Alembic.Resource.id` with the values being the full
+  `Alembic.Resource.t`
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => [
+      ...>       %{
+      ...>         "type" => "articles",
+      ...>         "id" => "1",
+      ...>         "relationships" => %{
+      ...>           "author" => %{
+      ...>             "data" => %{
+      ...>               "type" => "people",
+      ...>               "id" => "9"
+      ...>             }
+      ...>           },
+      ...>           "comments" => %{
+      ...>             "data" => [
+      ...>               %{
+      ...>                 "type" => "comments",
+      ...>                 "id" => "5"
+      ...>               },
+      ...>               %{
+      ...>                 "type" => "comments",
+      ...>                 "id" => "12"
+      ...>               }
+      ...>             ]
+      ...>           }
+      ...>         }
+      ...>       }
+      ...>     ],
+      ...>     "included" => [
+      ...>       %{
+      ...>         "type" => "people",
+      ...>         "id" => "9",
+      ...>         "attributes" => %{
+      ...>           "first-name" => "Dan",
+      ...>           "last-name" => "Gebhardt",
+      ...>           "twitter" => "dgeb"
+      ...>         }
+      ...>       },
+      ...>       %{
+      ...>         "type" => "comments",
+      ...>         "id" => "5",
+      ...>         "attributes" => %{
+      ...>           "body" => "First!"
+      ...>         },
+      ...>         "relationships" => %{
+      ...>           "author" => %{
+      ...>             "data" => %{
+      ...>               "type" => "people",
+      ...>               "id" => "2"
+      ...>             }
+      ...>           }
+      ...>         }
+      ...>       },
+      ...>       %{
+      ...>         "type" => "comments",
+      ...>         "id" => "12",
+      ...>         "attributes" => %{
+      ...>           "body" => "I like XML better"
+      ...>         },
+      ...>         "relationships" => %{
+      ...>           "author" => %{
+      ...>             "data" => %{
+      ...>               "type" => "people",
+      ...>               "id" => "9"
+      ...>             }
+      ...>           }
+      ...>         }
+      ...>       }
+      ...>     ]
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      ...> Alembic.Document.included_resource_by_id_by_type(document)
+      %{
+        "comments" => %{
+          "12" => %Alembic.Resource{
+            attributes: %{
+              "body" => "I like XML better"
+            },
+            id: "12",
+            relationships: %{
+              "author" => %Alembic.Relationship{
+                data: %Alembic.ResourceIdentifier{
+                  id: "9",
+                  type: "people"
+                }
+              }
+            },
+            type: "comments"
+          },
+          "5" => %Alembic.Resource{
+            attributes: %{
+              "body" => "First!"
+            },
+            id: "5",
+            relationships: %{
+              "author" => %Alembic.Relationship{
+                data: %Alembic.ResourceIdentifier{
+                  id: "2",
+                  type: "people"
+                }
+              }
+            },
+            type: "comments"
+          }
+        },
+        "people" => %{
+          "9" => %Alembic.Resource{
+            attributes: %{
+              "first-name" => "Dan",
+              "last-name" => "Gebhardt",
+              "twitter" => "dgeb"
+            },
+            id: "9",
+            type: "people"
+          }
+        }
+      }
+
+  """
+  @spec included_resource_by_id_by_type(t) :: ToParams.resource_by_id_by_type
+
+  def included_resource_by_id_by_type(%__MODULE__{included: nil}), do: %{}
+
+  def included_resource_by_id_by_type(%__MODULE__{included: included}) do
+    Enum.reduce(
+      included,
+      %{},
+      fn (resource = %Resource{id: id, type: type}, resource_by_id_by_type) ->
+        resource_by_id_by_type
+        |> Map.put_new(type, %{})
+        |> put_in([type, id], resource)
+      end
+    )
+  end
+
+  @doc """
   Merges the errors from two documents together.
 
   The errors from the second document are prepended to the errors of the first document so that the errors as a whole
@@ -685,6 +866,252 @@ defmodule Alembic.Document do
   def reverse(document = %__MODULE__{errors: errors}) when is_list(errors) do
     %__MODULE__{document | errors: Enum.reverse(errors)}
   end
+
+  @doc """
+  Transforms a `t` into the nested params format used by
+  [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4).
+
+  ## No resource
+
+  No resource is transformed to an empty map
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => nil
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_params(document)
+      %{}
+
+  ## Single resource
+
+  A single resource is converted to a params map that combines the id and attributes.
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => %{
+      ...>       "attributes" => %{
+      ...>         "name" => "Thing 1"
+      ...>       },
+      ...>       "id" => "1",
+      ...>       "type" => "thing"
+      ...>     }
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_params(document)
+      %{
+        "id" => "1",
+        "name" => "Thing 1"
+      }
+
+  ### Relationships
+
+  Relationships are merged into the params for the resource
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => %{
+      ...>       "attributes" => %{
+      ...>         "name" => "Thing 1"
+      ...>       },
+      ...>       "id" => "1",
+      ...>       "relationships" => %{
+      ...>         "shirt" => %{
+      ...>           "data" => %{
+      ...>             "attributes" => %{
+      ...>               "size" => "L"
+      ...>             },
+      ...>             "type" => "shirt"
+      ...>           }
+      ...>         }
+      ...>       },
+      ...>       "type" => "thing"
+      ...>     }
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :create,
+      ...>       "sender" => :client
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_params(document)
+      %{
+        "id" => "1",
+        "name" => "Thing 1",
+        "shirt" => %{
+          "size" => "L"
+        }
+      }
+
+  ## Multiple resources
+
+  Multiple resources are converted to a params list where each element is a map that combines the id and attributes
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => [
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "1",
+      ...>         "attributes" => %{
+      ...>           "text" => "Welcome"
+      ...>         }
+      ...>       },
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "2",
+      ...>         "attributes" => %{
+      ...>           "text" => "It's been awhile"
+      ...>         }
+      ...>       }
+      ...>     ]
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_params(document)
+      [
+        %{
+          "id" => "1",
+          "text" => "Welcome"
+        },
+        %{
+          "id" => "2",
+          "text" => "It's been awhile"
+        }
+      ]
+
+  ### Relationships
+
+  Relationships are merged into the params for the corresponding resource
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => [
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "1",
+      ...>         "attributes" => %{
+      ...>           "text" => "Welcome"
+      ...>         },
+      ...>         "relationships" => %{
+      ...>           "comments" => %{
+      ...>             "data" => [
+      ...>               %{
+      ...>                 "type" => "comment",
+      ...>                 "id" => "1"
+      ...>               }
+      ...>             ]
+      ...>           }
+      ...>         }
+      ...>       },
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "2",
+      ...>         "attributes" => %{
+      ...>           "text" => "It's been awhile"
+      ...>         },
+      ...>         "relationships" => %{
+      ...>           "comments" => %{
+      ...>             "data" => []
+      ...>           }
+      ...>         }
+      ...>       }
+      ...>     ],
+      ...>     "included" => [
+      ...>       %{
+      ...>         "type" => "comment",
+      ...>         "id" => "1",
+      ...>         "attributes" => %{
+      ...>           "text" => "First!"
+      ...>         }
+      ...>       }
+      ...>     ]
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_params(document)
+      [
+        %{
+          "id" => "1",
+          "text" => "Welcome",
+          "comments" => [
+            %{
+              "id" => "1",
+              "text" => "First!"
+            }
+          ]
+        },
+        %{
+          "id" => "2",
+          "text" => "It's been awhile",
+          "comments" => []
+        }
+      ]
+
+  """
+  @spec to_params(t) :: [map] | map
+  def to_params(document = %__MODULE__{}) do
+    resource_by_id_by_type = included_resource_by_id_by_type(document)
+    to_params(document, resource_by_id_by_type)
+  end
+
+  @doc """
+  Transforms a `t` into the nested params format used by
+  [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4) using the given
+  `resources_by_id_by_type`.
+
+  See `Alembic.Document.to_params/1`
+  """
+  @spec to_params(%__MODULE__{data: [Resource.t] | Resource.t | nil},
+                  ToParams.resource_by_id_by_type) :: ToParams.params
+
+  def to_params(%__MODULE__{data: data}, resource_by_id_by_type) when is_list(data) do
+    Enum.map(data, &Resource.to_params(&1, resource_by_id_by_type))
+  end
+
+  def to_params(%__MODULE__{data: resource = %Resource{}}, resource_by_id_by_type) do
+    Resource.to_params(resource, resource_by_id_by_type)
+  end
+
+  def to_params(%__MODULE__{data: nil}, _), do: %{}
 
   ## Private functions
 
