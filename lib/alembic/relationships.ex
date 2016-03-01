@@ -12,14 +12,15 @@ defmodule Alembic.Relationships do
   > </cite>
   """
 
-  alias Alembic
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson
   alias Alembic.Relationship
+  alias Alembic.ToEctoSchema
   alias Alembic.ToParams
 
   @behaviour FromJson
+  @behaviour ToEctoSchema
   @behaviour ToParams
 
   # Constants
@@ -244,6 +245,125 @@ defmodule Alembic.Relationships do
         ]
       }
     }
+  end
+
+  @doc """
+  Converts relationships to map of the relationship's struct(s) that can be merged with the struct for the primary data
+
+  ## No relationships
+
+  No relationships are represented as `nil` in `IntrepreterServer.Api.Document.t`, but since the output of
+  `to_ecto_schema/2` is expected to be `struct/2` combinable with the primary resource's struct, an empty map is
+  returned when relationships is `nil`.
+
+      iex> Alembic.Relationships.to_ecto_schema(nil, %{}, %{})
+      %{}
+
+  ## Some Relationships
+
+  Relatonships are expected to be `struct/2` combinable with the primary resource's struct, so relationships are
+  returned as a map using the original relationship name and each `Alembic.Relationship.t` converted with
+  `Alembic.Relationship.to_ecto_schema/3`.
+
+  ### Resource Identifiers
+
+  If the resource linkage for a relationship is an `Alembic.ResourceIdentifier.t`, then the attributes for
+  the resource will be looked up in `resource_by_id_by_type`.
+
+      iex> Alembic.Relationships.to_ecto_schema(
+      ...>   %{
+      ...>     "author" => %Alembic.Relationship{
+      ...>       data: %Alembic.ResourceIdentifier{id: "1", type: "author"}
+      ...>     }
+      ...>   },
+      ...>   %{
+      ...>     "author" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "author",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "name" => "Alice"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   },
+      ...>   %{
+      ...>     "author" => Alembic.TestAuthor
+      ...>   }
+      ...> )
+      %{
+        "author" => %Alembic.TestAuthor{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "authors"},
+            state: :built
+          },
+          id: 1,
+          name: "Alice"
+        }
+      }
+
+  Resources are not required to be in `resources_by_id_by_type`, as would be the case when only a foreign key is
+  supplied.
+
+      iex> Alembic.Relationships.to_ecto_schema(
+      ...>   %{
+      ...>     "author" => %Alembic.Relationship{
+      ...>       data: %Alembic.ResourceIdentifier{id: "1", type: "author"}
+      ...>     }
+      ...>   },
+      ...>   %{},
+      ...>   %{
+      ...>     "author" => Alembic.TestAuthor
+      ...>   }
+      ...> )
+      %{
+        "author" => %Alembic.TestAuthor{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "authors"},
+            state: :built
+          },
+          id: 1
+        }
+      }
+
+  ### Resources
+
+  On create or update, the relationships can directly contain `Alembic.Resource.t` that are to be created,
+  in which case the `resource_by_id_by_type` are ignored.
+
+      iex> Alembic.Relationships.to_ecto_schema(
+      ...>   %{
+      ...>     "author" => %Alembic.Relationship{
+      ...>       data: %Alembic.Resource{
+      ...>         attributes: %{"name" => "Alice"},
+      ...>         type: "author"
+      ...>       }
+      ...>     },
+      ...>   },
+      ...>   %{},
+      ...>   %{
+      ...>     "author" => Alembic.TestAuthor
+      ...>   }
+      ...> )
+      %{
+        "author" => %Alembic.TestAuthor{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "authors"},
+            state: :built
+          },
+          name: "Alice"
+        }
+      }
+  """
+
+  @spec to_ecto_schema(nil, ToParams.resource_by_id_by_type, ToEctoSchema.ecto_schema_module_by_type) :: map
+  def to_ecto_schema(nil, _, _), do: %{}
+
+  @spec to_ecto_schema(t, ToParams.resource_by_id_by_type, ToEctoSchema.ecto_schema_module_by_type) :: map
+  def to_ecto_schema(relationship_by_name, resource_by_id_by_type, ecto_schema_module_by_type) do
+    Enum.into relationship_by_name, %{}, fn {name, relationship} ->
+      {name, Relationship.to_ecto_schema(relationship, resource_by_id_by_type, ecto_schema_module_by_type)}
+    end
   end
 
   @doc """

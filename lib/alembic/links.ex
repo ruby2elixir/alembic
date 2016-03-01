@@ -8,7 +8,6 @@ defmodule Alembic.Links do
   > </cite>
   """
 
-  alias Alembic
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson

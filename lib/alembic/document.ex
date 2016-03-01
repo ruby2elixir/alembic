@@ -3,18 +3,19 @@ defmodule Alembic.Document do
   JSON API refers to the top-level JSON structure as a [document](http://jsonapi.org/format/#document-structure).
   """
 
-  alias Alembic
   alias Alembic.Error
   alias Alembic.FromJson
   alias Alembic.Links
   alias Alembic.Meta
   alias Alembic.Resource
   alias Alembic.ResourceLinkage
+  alias Alembic.ToEctoSchema
   alias Alembic.ToParams
 
   # Behaviours
 
   @behaviour FromJson
+  @behaviour ToEctoSchema
   @behaviour ToParams
 
   # Constants
@@ -865,6 +866,364 @@ defmodule Alembic.Document do
   """
   def reverse(document = %__MODULE__{errors: errors}) when is_list(errors) do
     %__MODULE__{document | errors: Enum.reverse(errors)}
+  end
+
+  @doc """
+  Converts a document into one or more [`Ecto.Schema.t`](http://hexdocs.pm/ecto/Ecto.Schema.html#t:t/0) structs.
+
+  ## Parameters
+  * `document` - supplies resource attributes and associations (through `included`)
+  * `ecto_schema_module_by_type` - Maps the `Alembic.Resource.t` `type` `String.t` to the `Ecto.Schema`
+    module to use with [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4).
+
+  ## Returns
+  * `{:ok, nil}` - an empty single resource
+  * `{:ok, struct}` - a single resource
+  * `{:ok, []}` - an empty resource collection
+  * `{:ok, [struct]}` - a non-empty resource collection
+  * `{:error, t}` - the `document` have errors and so won't be converted to struct(s).
+
+  ## Examples
+
+  ### No resource
+
+  No resource has to return `nil` for Ecto schema because the type is not present.
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => nil
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_ecto_schema(document, %{})
+      {:ok, nil}
+
+  ### Single resource
+
+  A single resource is converted to a single Ecto schema struct corresponding to the type.
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => %{
+      ...>       "attributes" => %{
+      ...>         "name" => "Thing 1"
+      ...>       },
+      ...>       "id" => "1",
+      ...>       "type" => "thing"
+      ...>     }
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_ecto_schema(
+      ...>   document,
+      ...>   %{
+      ...>     "thing" => Alembic.TestThing
+      ...>   }
+      ...> )
+      {
+        :ok,
+        %Alembic.TestThing{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "things"},
+            state: :built
+          },
+          id: 1,
+          name: "Thing 1"
+        }
+      }
+
+  #### Relationships
+
+  Relationships are merged into the struct for the resource
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => %{
+      ...>       "attributes" => %{
+      ...>         "name" => "Thing 1"
+      ...>       },
+      ...>       "relationships" => %{
+      ...>         "shirt" => %{
+      ...>           "data" => %{
+      ...>             "attributes" => %{
+      ...>               "size" => "L"
+      ...>             },
+      ...>             "type" => "shirt"
+      ...>           }
+      ...>         }
+      ...>       },
+      ...>       "type" => "thing"
+      ...>     }
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :create,
+      ...>       "sender" => :client
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_ecto_schema(
+      ...>   document,
+      ...>   %{
+      ...>     "shirt" => Alembic.TestShirt,
+      ...>     "thing" => Alembic.TestThing
+      ...>   }
+      ...> )
+      {
+        :ok,
+        %Alembic.TestThing{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "things"},
+            state: :built
+          },
+          name: "Thing 1",
+          shirt: %Alembic.TestShirt{
+            __meta__: %Ecto.Schema.Metadata{
+              source: {nil, "shirts"},
+              state: :built
+            },
+            size: "L"
+          }
+        }
+      }
+
+  ### Multiple resources
+
+  Multiple resources are converted to a struct list where each element is a struct that combines the id and attributes
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => [
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "1",
+      ...>         "attributes" => %{
+      ...>           "text" => "Welcome"
+      ...>         }
+      ...>       },
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "2",
+      ...>         "attributes" => %{
+      ...>           "text" => "It's been awhile"
+      ...>         }
+      ...>       }
+      ...>     ]
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_ecto_schema(
+      ...>   document,
+      ...>   %{
+      ...>     "post" => Alembic.TestPost
+      ...>   }
+      ...> )
+      {
+        :ok,
+        [
+          %Alembic.TestPost{
+            __meta__: %Ecto.Schema.Metadata{
+              source: {nil, "posts"},
+              state: :built
+            },
+            author: %Ecto.Association.NotLoaded{
+              __cardinality__: :one,
+              __field__: :author,
+              __owner__: Alembic.TestPost
+            },
+            author_id: nil,
+            id: 1,
+            text: "Welcome"
+          },
+          %Alembic.TestPost{
+            __meta__: %Ecto.Schema.Metadata{
+              source: {nil, "posts"},
+              state: :built
+            },
+            author: %Ecto.Association.NotLoaded{
+              __cardinality__: :one,
+              __field__: :author,
+              __owner__: Alembic.TestPost
+            },
+            author_id: nil,
+            id: 2,
+            text: "It's been awhile"
+          }
+        ]
+      }
+
+  #### Relationships
+
+  Relationships are merged into the structs for the corresponding resource
+
+      iex> {:ok, document} = Alembic.Document.from_json(
+      ...>   %{
+      ...>     "data" => [
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "1",
+      ...>         "attributes" => %{
+      ...>           "text" => "Welcome"
+      ...>         },
+      ...>         "relationships" => %{
+      ...>           "comments" => %{
+      ...>             "data" => [
+      ...>               %{
+      ...>                 "type" => "comment",
+      ...>                 "id" => "3"
+      ...>               }
+      ...>             ]
+      ...>           }
+      ...>         }
+      ...>       },
+      ...>       %{
+      ...>         "type" => "post",
+      ...>         "id" => "2",
+      ...>         "attributes" => %{
+      ...>           "text" => "It's been awhile"
+      ...>         },
+      ...>         "relationships" => %{
+      ...>           "comments" => %{
+      ...>             "data" => []
+      ...>           }
+      ...>         }
+      ...>       }
+      ...>     ],
+      ...>     "included" => [
+      ...>       %{
+      ...>         "type" => "comment",
+      ...>         "id" => "3",
+      ...>         "attributes" => %{
+      ...>           "text" => "First!"
+      ...>         }
+      ...>       }
+      ...>     ]
+      ...>   },
+      ...>   %Alembic.Error{
+      ...>     meta: %{
+      ...>       "action" => :fetch,
+      ...>       "sender" => :server
+      ...>     },
+      ...>     source: %Alembic.Source{
+      ...>       pointer: ""
+      ...>     }
+      ...>   }
+      ...> )
+      iex> Alembic.Document.to_ecto_schema(
+      ...>   document,
+      ...>   %{
+      ...>     "comment" => Alembic.TestComment,
+      ...>     "post" => Alembic.TestPost
+      ...>   }
+      ...> )
+      {
+        :ok,
+        [
+          %Alembic.TestPost{
+            __meta__: %Ecto.Schema.Metadata{
+              source: {nil, "posts"},
+              state: :built
+            },
+            author: %Ecto.Association.NotLoaded{
+              __cardinality__: :one,
+              __field__: :author,
+              __owner__: Alembic.TestPost
+            },
+            author_id: nil,
+            comments: [
+              %Alembic.TestComment{
+                __meta__: %Ecto.Schema.Metadata{
+                  source: {nil, "comments"},
+                  state: :built
+                },
+                id: 3,
+                post: %Ecto.Association.NotLoaded{
+                  __cardinality__: :one,
+                  __field__: :post,
+                  __owner__: Alembic.TestComment
+                },
+                post_id: nil,
+                text: "First!"
+              }
+            ],
+            id: 1,
+            text: "Welcome"
+          },
+          %Alembic.TestPost{
+            __meta__: %Ecto.Schema.Metadata{
+              source: {nil, "posts"},
+              state: :built
+            },
+            author: %Ecto.Association.NotLoaded{
+              __cardinality__: :one,
+              __field__: :author,
+              __owner__: Alembic.TestPost
+            },
+            author_id: nil,
+            comments: [],
+            id: 2,
+            text: "It's been awhile"
+          }
+        ]
+      }
+
+  """
+  @spec to_ecto_schema(%__MODULE__{}, %{String.t => module}) :: {:ok, nil | struct | [] | [struct]} | {:error, t}
+  def to_ecto_schema(document = %__MODULE__{errors: errors}, %{}) when not is_nil(errors) do
+    {:error, document}
+  end
+
+  def to_ecto_schema(%__MODULE__{data: nil}, %{}), do: {:ok, nil}
+  def to_ecto_schema(%__MODULE__{data: []}, %{}), do: {:ok, []}
+
+  def to_ecto_schema(document = %__MODULE__{}, ecto_schema_module_by_type) do
+    {:ok, to_ecto_schema(document, included_resource_by_id_by_type(document), ecto_schema_module_by_type)}
+  end
+
+  @doc """
+  Call `to_ecto_schema/2` instead to automatically generate `attributes_by_id_by_type`
+  """
+  @spec to_ecto_schema(%__MODULE__{data: [Resource.t] | Resource.t},
+                       ToParams.resource_by_id_by_type,
+                       ToEctoSchema.ecto_schema_module_by_type) :: [struct] | struct
+
+  def to_ecto_schema(%__MODULE__{data: resource = %Resource{}},
+                     resource_by_id_by_type,
+                     ecto_schema_module_by_type) do
+    Resource.to_ecto_schema(resource, resource_by_id_by_type, ecto_schema_module_by_type)
+  end
+
+  def to_ecto_schema(%__MODULE__{data: resources},
+                     resource_by_id_by_type,
+                     ecto_schema_module_by_type) when is_list(resources) do
+    Enum.map resources, &Resource.to_ecto_schema(&1, resource_by_id_by_type, ecto_schema_module_by_type)
   end
 
   @doc """

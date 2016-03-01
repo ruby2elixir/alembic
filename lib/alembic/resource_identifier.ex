@@ -3,15 +3,16 @@ defmodule Alembic.ResourceIdentifier do
   A [JSON API Resource Identifier](http://jsonapi.org/format/#document-resource-identifier-objects).
   """
 
-  alias Alembic
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson
   alias Alembic.Meta
   alias Alembic.Resource
+  alias Alembic.ToEctoSchema
   alias Alembic.ToParams
 
   @behaviour FromJson
+  @behaviour ToEctoSchema
   @behaviour ToParams
 
   # Constants
@@ -252,6 +253,69 @@ defmodule Alembic.ResourceIdentifier do
         ]
       }
     }
+  end
+
+  @doc """
+  Converts `t` to an [`Ecto.Schema`](http://hexdocs.pm/ecto/Ecto.Schema.html#t:t/0) struct.
+
+  `id` and `type` will be used to lookup the attributes in `resource_by_id_by_type`.  Theses attributes and the id
+  will be combined into a struct corresponding to the type.
+
+      iex> Alembic.ResourceIdentifier.to_ecto_schema(
+      ...>   %Alembic.ResourceIdentifier{
+      ...>     type: "author",
+      ...>     id: "1"
+      ...>   },
+      ...>   %{
+      ...>     "author" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "author",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "name" => "Alice"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   },
+      ...>   %{
+      ...>     "author" => Alembic.TestAuthor
+      ...>   }
+      ...> )
+      %Alembic.TestAuthor{
+        __meta__: %Ecto.Schema.Metadata{
+          source: {nil, "authors"},
+          state: :built
+        },
+        id: 1,
+        name: "Alice"
+      }
+
+  If no entry is found in `resource_by_id_by_type`, then only the `id` is copied to the struct.  This can happen when
+  the server only wants to send foreign keys.
+
+      iex> Alembic.ResourceIdentifier.to_ecto_schema(
+      ...>   %Alembic.ResourceIdentifier{
+      ...>    type: "author",
+      ...>     id: "1"
+      ...>   },
+      ...>   %{},
+      ...>   %{
+      ...>     "author" => Alembic.TestAuthor
+      ...>   }
+      ...> )
+      %Alembic.TestAuthor{
+        __meta__: %Ecto.Schema.Metadata{
+          source: {nil, "authors"},
+          state: :built
+        },
+        id: 1
+      }
+
+  """
+  @spec to_ecto_schema(t, ToParams.resource_by_id_by_type, ToEctoSchema.ecto_schema_module_by_type) :: struct
+  def to_ecto_schema(resource_identifier = %__MODULE__{}, resource_by_id_by_type, ecto_schema_module_by_type) do
+    params = to_params(resource_identifier, resource_by_id_by_type)
+    ToEctoSchema.to_ecto_schema(resource_identifier, params, ecto_schema_module_by_type)
   end
 
   @doc """
