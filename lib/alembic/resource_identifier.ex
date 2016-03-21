@@ -367,4 +367,40 @@ defmodule Alembic.ResourceIdentifier do
 
     Map.put(attributes, "id", id)
   end
+
+  # Protocol Implementations
+
+  defimpl Poison.Encoder do
+    @doc """
+    Only non-`nil` members are encoded
+
+        iex> Poison.encode(
+        ...>   %Alembic.ResourceIdentifier{
+        ...>     type: "post",
+        ...>     id: "1"
+        ...>   }
+        ...> )
+        {:ok, "{\\"type\\":\\"post\\",\\"id\\":\\"1\\"}"}
+
+    But, `type` and `id` are always required, so without them, an exception is raised.
+
+        iex> try do
+        ...>   Poison.encode(%Alembic.ResourceIdentifier{})
+        ...> rescue
+        ...>   e in FunctionClauseError -> e
+        ...> end
+        %FunctionClauseError{
+          arity: 2,
+          function: :encode,
+          module: Poison.Encoder.Alembic.ResourceIdentifier
+        }
+
+    """
+    def encode(resource_identifier = %@for{type: type, id: id}, options) when not is_nil(type) and not is_nil(id) do
+      # strip `nil` so that resource identifiers without meta don't end up with `"meta": null` after encoding
+      map = for {field, value} <- Map.from_struct(resource_identifier), value != nil, into: %{}, do: {field, value}
+
+      Poison.Encoder.Map.encode(map, options)
+    end
+  end
 end
