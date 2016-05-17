@@ -1,5 +1,4 @@
 /_build
-/cover
 /deps
 erl_crash.dump
 *.ez
@@ -7,3 +6,6 @@ erl_crash.dump
 # IntellIJ project files
 /.idea
 alembic.iml
+
+# mix test --cover output
+/cover
