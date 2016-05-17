@@ -27,6 +27,9 @@ defmodule Alembic.Mixfile do
   #
   # Type "mix help deps" for more examples and options
   defp deps do
-    []
+    [
+      # formats test output for CircleCI
+      {:junit_formatter, "~> 1.0", only: :test},
+    ]
   end
 end
