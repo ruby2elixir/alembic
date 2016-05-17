@@ -7,7 +7,8 @@ defmodule Alembic.Mixfile do
      elixir: "~> 1.2",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
-     deps: deps]
+     deps: deps,
+     test_coverage: [tool: Coverex.Task]]
   end
 
   # Configuration for the OTP application
@@ -28,6 +29,8 @@ defmodule Alembic.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
+      # test coverge tool.  Allow `--cover` option for `mix test`
+      {:coverex, "~> 1.4", only: :test},
       # formats test output for CircleCI
       {:junit_formatter, "~> 1.0", only: :test},
     ]
