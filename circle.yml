@@ -1,0 +1,20 @@
+machine:
+  environment:
+    MIX_ENV: test
+dependencies:
+  cache_directories:
+    - ../erlang-solutions
+    - ../elixir
+  pre:
+    - if [[ ! -e ../erlang-solutions ]]; then cd .. && wget http://packages.erlang-solutions.com/erlang-solutions_1.0_all.deb && mkdir erlang-solutions && mv erlang-solutions_1.0_all.deb erlang-solutions && cd -; fi
+    - sudo dpkg -i /home/ubuntu/erlang-solutions/erlang-solutions_1.0_all.deb
+    - sudo apt-get update
+    - sudo apt-get install -y erlang erlang-ssl erlang-inets
+    - if [[ ! -e ../elixir ]]; then cd .. && git clone https://github.com/elixir-lang/elixir.git && cd elixir && git checkout v1.2.3 && make && cd /home/ubuntu; fi
+    - ln -s /home/ubuntu/elixir/bin/* /home/ubuntu/bin
+    - mix local.hex --force && mix local.rebar --force
+  post:
+    - mix deps.get
+test:
+  override:
+    - mix test
