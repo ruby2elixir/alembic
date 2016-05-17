@@ -37,6 +37,8 @@ defmodule Alembic.Mixfile do
       {:credo, "~> 0.3.13", only: [:dev, :test]},
       # test coverge tool.  Allow `--cover` option for `mix test`
       {:coverex, "~> 1.4", only: :test},
+      # success type checker: ensures @type and @spec are valid
+      {:dialyze, "~> 0.2.1", only: :dev},
       # markdown to HTML converter for ex_doc
       {:earmark, "~> 0.2.1", only: :dev},
       # documentation generation
