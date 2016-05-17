@@ -2,13 +2,17 @@ defmodule Alembic.Mixfile do
   use Mix.Project
 
   def project do
-    [app: :alembic,
-     version: "0.0.1",
-     elixir: "~> 1.2",
-     build_embedded: Mix.env == :prod,
-     start_permanent: Mix.env == :prod,
-     deps: deps,
-     test_coverage: [tool: Coverex.Task]]
+    [
+      app: :alembic,
+      build_embedded: Mix.env == :prod,
+      deps: deps,
+      elixir: "~> 1.2",
+      name: "Alembic",
+      source_url: "https://github.com/C-S-D/alembic",
+      start_permanent: Mix.env == :prod,
+      test_coverage: [tool: Coverex.Task],
+      version: "0.0.1"
+    ]
   end
 
   # Configuration for the OTP application
@@ -31,8 +35,14 @@ defmodule Alembic.Mixfile do
     [
       # test coverge tool.  Allow `--cover` option for `mix test`
       {:coverex, "~> 1.4", only: :test},
+      # markdown to HTML converter for ex_doc
+      {:earmark, "~> 0.2.1", only: :dev},
+      # documentation generation
+      {:ex_doc, "~> 0.11.5", only: :dev},
+      # documentation coverage
+      {:inch_ex, "~> 0.5.1", only: [:dev, :test]},
       # formats test output for CircleCI
-      {:junit_formatter, "~> 1.0", only: :test},
+      {:junit_formatter, "~> 1.0", only: :test}
     ]
   end
 end

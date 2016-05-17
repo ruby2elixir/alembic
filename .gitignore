@@ -7,5 +7,11 @@ erl_crash.dump
 /.idea
 alembic.iml
 
+# mix docs output
+/doc
+
+# mix inch output
+/docs
+
 # mix test --cover output
 /cover

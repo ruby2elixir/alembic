@@ -19,6 +19,7 @@ test:
   override:
     - mix test --cover
   post:
+    - mix inch.report
     - cp -a cover ${CIRCLE_ARTIFACTS}/
     - mkdir -p ${CIRCLE_TEST_REPORTS}/Elixir
     - mv _build/test/test-junit-report.xml ${CIRCLE_TEST_REPORTS}/Elixir/
