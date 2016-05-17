@@ -1,4 +1,8 @@
 defmodule AlembicTest do
+  @moduledoc """
+  Tests `Alembic`
+  """
+
   use ExUnit.Case
   doctest Alembic
 
