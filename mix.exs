@@ -33,6 +33,8 @@ defmodule Alembic.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
+      # static code analysis for style and consistency
+      {:credo, "~> 0.3.13", only: [:dev, :test]},
       # test coverge tool.  Allow `--cover` option for `mix test`
       {:coverex, "~> 1.4", only: :test},
       # markdown to HTML converter for ex_doc

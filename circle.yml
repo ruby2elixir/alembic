@@ -19,6 +19,7 @@ test:
   override:
     - mix test --cover
   post:
+    - mix credo --strict
     - mix inch.report
     - cp -a cover ${CIRCLE_ARTIFACTS}/
     - mkdir -p ${CIRCLE_TEST_REPORTS}/Elixir
