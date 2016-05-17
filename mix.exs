@@ -39,6 +39,8 @@ defmodule Alembic.Mixfile do
       {:earmark, "~> 0.2.1", only: :dev},
       # documentation generation
       {:ex_doc, "~> 0.11.5", only: :dev},
+      # documentation coverage
+      {:inch_ex, "~> 0.5.1", only: [:dev, :test]},
       # formats test output for CircleCI
       {:junit_formatter, "~> 1.0", only: :test}
     ]
