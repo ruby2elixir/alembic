@@ -1,5 +1,7 @@
 # Alembic
 
+[![CircleCI](https://circleci.com/gh/C-S-D/alembic.svg?style=svg)](https://circleci.com/gh/C-S-D/alembic)
+
 **TODO: Add description**
 
 ## Installation
