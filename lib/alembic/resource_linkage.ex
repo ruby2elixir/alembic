@@ -21,8 +21,12 @@ defmodule Alembic.ResourceLinkage do
   alias Alembic.FromJson
   alias Alembic.Resource
   alias Alembic.ResourceIdentifier
+  alias Alembic.ToEctoSchema
+  alias Alembic.ToParams
 
   @behaviour FromJson
+  @behaviour ToEctoSchema
+  @behaviour ToParams
 
   # Constants
 
@@ -341,6 +345,298 @@ defmodule Alembic.ResourceLinkage do
   # Alembic.json -- [nil, [], Alembic.json_object, [Alembic.json_object]]
   @spec from_json(true | false | float | integer, Error.t) :: FromJson.error
   def from_json(_, error_template), do: type_error(error_template)
+
+  @doc """
+  Converts resource linkage to one or more [`Ecto.Schema.t`](http://hexdocs.pm/ecto/Ecto.Schema.html#t:t/0) structs.
+
+  ## To-one
+
+  An empty to-one, `nil`, is `nil` when converted to an Ecto Schema struct because no type information is available.
+
+      iex> Alembic.ResourceLinkage.to_ecto_schema(nil, %{}, %{})
+      nil
+
+  A resource identifier uses `resource_by_id_by_type` to fill in the attributes of the referenced resource. `type` is
+  dropped as [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4) doesn't verify types in the
+  params.
+
+      iex> Alembic.ResourceLinkage.to_ecto_schema(
+      ...>   %Alembic.ResourceIdentifier{
+      ...>     type: "shirt",
+      ...>     id: "1"
+      ...>   },
+      ...>   %{
+      ...>     "shirt" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "shirt",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "size" => "L"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   },
+      ...>   %{
+      ...>     "shirt" => Alembic.TestShirt
+      ...>   }
+      ...> )
+      %Alembic.TestShirt{
+        __meta__: %Ecto.Schema.Metadata{
+          source: {nil, "shirts"},
+          state: :built
+        },
+        id: 1,
+        size: "L"
+      }
+
+  On create or update, a relationship can be created by having an `Alembic.Resource.t`, in which case the
+  attributes are supplied by the `Alembic.Resource.t`, instead of `resource_by_id_by_type`.
+
+      iex> Alembic.ResourceLinkage.to_ecto_schema(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{
+      ...>       "size" => "L"
+      ...>     },
+      ...>     type: "shirt"
+      ...>   },
+      ...>   %{},
+      ...>   %{
+      ...>     "shirt" => Alembic.TestShirt
+      ...>   }
+      ...> )
+      %Alembic.TestShirt{
+        __meta__: %Ecto.Schema.Metadata{
+          source: {nil, "shirts"},
+          state: :built
+        },
+        size: "L"
+      }
+
+  ## To-many
+
+  An empty to-many, `[]`, is `[]` when converted because there is no type information available
+
+      iex> Alembic.ResourceLinkage.to_ecto_schema(
+      ...>   [],
+      ...>   %{},
+      ...>   %{}
+      ...> )
+      []
+
+  A list of resource identifiers uses `resources_by_id_by_type` to fill in the attributes of the referenced resources.
+
+      iex> Alembic.ResourceLinkage.to_ecto_schema(
+      ...>   [
+      ...>     %Alembic.ResourceIdentifier{
+      ...>       type: "shirt",
+      ...>       id: "1"
+      ...>     }
+      ...>   ],
+      ...>   %{
+      ...>     "shirt" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "shirt",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "size" => "L"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   },
+      ...>   %{
+      ...>     "shirt" => Alembic.TestShirt
+      ...>   }
+      ...> )
+      [
+        %Alembic.TestShirt{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "shirts"},
+            state: :built
+          },
+          id: 1,
+          size: "L"
+        }
+      ]
+
+  On create or update, a relationship can be created by having an `Alembic.Resource`, in which case the
+  attributes are supplied by the `Alembic.Resource`, instead of `resource_by_id_by_type`.
+
+      iex> Alembic.ResourceLinkage.to_ecto_schema(
+      ...>   [
+      ...>     %Alembic.Resource{
+      ...>       attributes: %{
+      ...>         "size" => "L"
+      ...>       },
+      ...>       type: "shirt"
+      ...>     }
+      ...>   ],
+      ...>   %{},
+      ...>   %{
+      ...>     "shirt" => Alembic.TestShirt
+      ...>   }
+      ...> )
+      [
+        %Alembic.TestShirt{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "shirts"},
+            state: :built
+          },
+          id: nil,
+          size: "L"
+        }
+      ]
+
+  """
+
+  @spec to_ecto_schema(nil, ToParams.resource_by_id_by_type, ToEctoSchema.ecto_schema_module_by_type) :: nil
+  def to_ecto_schema(nil, _, _), do: nil
+
+  @spec to_ecto_schema([Resource.t] | [ResourceIdentifier.t],
+                       ToParams.resource_by_id_by_type,
+                       ToEctoSchema.ecto_schema_module_by_type) :: [struct]
+  def to_ecto_schema(list, resource_by_id_by_type, ecto_schema_module_by_type) when is_list(list) do
+    Enum.map list, &to_ecto_schema(&1, resource_by_id_by_type, ecto_schema_module_by_type)
+  end
+
+  @spec to_ecto_schema(Resource.t | ResourceIdentifier.t,
+                       ToParams.resource_by_id_by_type,
+                       ToEctoSchema.ecto_schema_module_by_type) :: struct
+
+  def to_ecto_schema(resource_identifier = %ResourceIdentifier{}, resource_by_id_by_type, ecto_schema_module_by_type) do
+    ResourceIdentifier.to_ecto_schema(resource_identifier, resource_by_id_by_type, ecto_schema_module_by_type)
+  end
+
+  def to_ecto_schema(resource = %Resource{}, resource_by_id_by_type, ecto_schema_module_by_type) do
+    Resource.to_ecto_schema(resource, resource_by_id_by_type, ecto_schema_module_by_type)
+  end
+
+  @doc """
+  Converts resource linkage to params format used by
+  [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4).
+
+  ## To-one
+
+  An empty to-one, `nil`, is `nil` when converted to params.
+
+      iex> Alembic.ResourceLinkage.to_params(nil, %{})
+      nil
+
+  A resource identifier uses `resource_by_id_by_type` to fill in the attributes of the referenced resource. `type` is
+  dropped as [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4) doesn't verify types in the
+  params.
+
+      iex> Alembic.ResourceLinkage.to_params(
+      ...>   %Alembic.ResourceIdentifier{
+      ...>     type: "shirt",
+      ...>     id: "1"
+      ...>   },
+      ...>   %{
+      ...>     "shirt" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "shirt",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "size" => "L"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   }
+      ...> )
+      %{
+        "id" => "1",
+        "size" => "L"
+      }
+
+  On create or update, a relationship can be created by having an `Alembic.Resource.t`, in which case the
+  attributes are supplied by the `Alembic.Resource.t`, instead of `resource_by_id_by_type`.
+
+      iex> Alembic.ResourceLinkage.to_params(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{
+      ...>       "size" => "L"
+      ...>     },
+      ...>     type: "shirt"
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "size" => "L"
+      }
+
+  ## To-many
+
+  An empty to-many, `[]`, is `[]` when converted to params
+
+      iex> Alembic.ResourceLinkage.to_params([], %{})
+      []
+
+  A list of resource identifiers uses `attributes_by_id_by_type` to fill in the attributes of the referenced resources.
+  `type` is dropped as [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4) doesn't verify types
+  in the params.
+
+      iex> Alembic.ResourceLinkage.to_params(
+      ...>   [
+      ...>     %Alembic.ResourceIdentifier{
+      ...>       type: "shirt",
+      ...>       id: "1"
+      ...>     }
+      ...>   ],
+      ...>   %{
+      ...>     "shirt" => %{
+      ...>       "1" => %Alembic.Resource{
+      ...>         type: "shirt",
+      ...>         id: "1",
+      ...>         attributes: %{
+      ...>           "size" => "L"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>  }
+      ...> )
+      [
+        %{
+          "id" => "1",
+          "size" => "L"
+        }
+      ]
+
+  On create or update, a relationship can be created by having an `Alembic.Resource`, in which case the
+  attributes are supplied by the `Alembic.Resource`, instead of `attributes_by_id_by_type`.
+
+      iex> Alembic.ResourceLinkage.to_params(
+      ...>   [
+      ...>     %Alembic.Resource{
+      ...>       attributes: %{
+      ...>         "size" => "L"
+      ...>       },
+      ...>       type: "shirt"
+      ...>     }
+      ...>   ],
+      ...>   %{}
+      ...> )
+      [
+        %{
+          "size" => "L"
+        }
+      ]
+
+  """
+  @spec to_params([Resource.t | ResourceIdentifier.t] | Resource.t | ResourceIdentifier.t | nil,
+                  ToParams.resource_by_id_by_type) :: ToParams.params
+
+  def to_params(nil, %{}), do: nil
+
+  def to_params(list, resource_by_id_by_type) when is_list(list) do
+    Enum.map list, &to_params(&1, resource_by_id_by_type)
+  end
+
+  def to_params(resource = %Resource{}, resource_by_id_by_type) do
+    Resource.to_params(resource, resource_by_id_by_type)
+  end
+
+  def to_params(resource_identifier = %ResourceIdentifier{}, resource_by_id_by_type) do
+    ResourceIdentifier.to_params(resource_identifier, resource_by_id_by_type)
+  end
 
   ## Private Functions
 

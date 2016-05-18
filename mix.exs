@@ -49,6 +49,8 @@ defmodule Alembic.Mixfile do
       {:dialyze, "~> 0.2.1", only: [:dev, :test]},
       # markdown to HTML converter for ex_doc
       {:earmark, "~> 0.2.1", only: :dev},
+      # conversion to Ecto.Schema struct
+      {:ecto, "~> 1.0"},
       # documentation generation
       {:ex_doc, "~> 0.11.5", only: :dev},
       # documentation coverage

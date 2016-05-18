@@ -5,15 +5,18 @@ defmodule Alembic.Resource do
   [resources](http://jsonapi.org/format/#document-resource-objects) as are the members of the `included` member.
   """
 
-  alias Alembic
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson
   alias Alembic.Links
   alias Alembic.Meta
   alias Alembic.Relationships
+  alias Alembic.ToEctoSchema
+  alias Alembic.ToParams
 
   @behaviour FromJson
+  @behaviour ToEctoSchema
+  @behaviour ToParams
 
   # Constants
 
@@ -90,6 +93,17 @@ defmodule Alembic.Resource do
   # Types
 
   @typedoc """
+  The ID of a `Resource.t`.  Usually the primary key or UUID for a resource in the server.
+  """
+  @type id :: String.t
+
+  @typedoc """
+  The type of a `Resource.t`.  Can be either singular or pluralized, althought the JSON API spec examples favor
+  pluralized.
+  """
+  @type type :: String.t
+
+  @typedoc """
   Resource objects" appear in a JSON API document to represent resources.
 
   A resource object **MUST** contain at least the following top-level members:
@@ -112,11 +126,11 @@ defmodule Alembic.Resource do
   """
   @type t :: %__MODULE__{
                attributes: Alembic.json_object | nil,
-               id: String.t | nil,
+               id: id | nil,
                links: Links.t | nil,
                meta: Meta.t | nil,
                relationships: Relationships.t | nil,
-               type: String.t
+               type: type
              }
 
   # Functions
@@ -802,6 +816,193 @@ defmodule Alembic.Resource do
         ]
       }
     }
+  end
+
+  @doc """
+  Converts `t` to [`Ecto.Schema.t`](http://hexdocs.pm/ecto/Ecto.Schema.html#t:t/0) struct.
+
+  The `id` and `attributes` are combined into the struct.
+
+      iex> Alembic.Resource.to_ecto_schema(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{
+      ...>       "text" => "First!"
+      ...>     },
+      ...>     id: "1",
+      ...>     type: "post"
+      ...>   },
+      ...>   %{},
+      ...>   %{
+      ...>     "post" => Alembic.TestPost
+      ...>   }
+      ...> )
+      %Alembic.TestPost{
+        __meta__: %Ecto.Schema.Metadata{
+          source: {nil, "posts"},
+          state: :built
+        },
+        id: 1,
+        text: "First!"
+      }
+
+  `id` as `nil` will pass through to the struct.
+
+      iex> Alembic.Resource.to_ecto_schema(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{
+      ...>       "text" => "First!"
+      ...>     },
+      ...>     type: "post"
+      ...>   },
+      ...>   %{},
+      ...>   %{
+      ...>     "post" => Alembic.TestPost
+      ...>   }
+      ...> )
+      %Alembic.TestPost{
+        __meta__: %Ecto.Schema.Metadata{
+          source: {nil, "posts"},
+          state: :built
+        },
+        text: "First!"
+      }
+
+  ## Relationships
+
+  Relationships's are merged into the `resource`'s struct using the relationship name (converted to an atom) as the key
+  in the `resource` struct.
+
+      iex> Alembic.Resource.to_ecto_schema(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{"text" => "First!"},
+      ...>     relationships: %{
+      ...>       "author" => %Alembic.Relationship{
+      ...>         data: %Alembic.ResourceIdentifier{id: 1, type: "author"}
+      ...>       }
+      ...>     },
+      ...>     type: "post"
+      ...>   },
+      ...>   %{},
+      ...>   %{
+      ...>     "author" => Alembic.TestAuthor,
+      ...>     "post" => Alembic.TestPost
+      ...>   }
+      ...> )
+      %Alembic.TestPost{
+        __meta__: %Ecto.Schema.Metadata{
+          source: {nil, "posts"},
+          state: :built
+        },
+        author: %Alembic.TestAuthor{
+          __meta__: %Ecto.Schema.Metadata{
+            source: {nil, "authors"},
+            state: :built
+          },
+          id: 1
+        },
+        author_id: 1,
+        text: "First!"
+      }
+
+  """
+  @spec to_ecto_schema(t, ToParams.resource_by_id_by_type, ToEctoSchema.ecto_schema_module_by_type) :: struct
+  def to_ecto_schema(resource = %__MODULE__{relationships: relationships},
+                     resource_by_id_by_type,
+                     ecto_schema_module_by_type) do
+
+    params = to_params(resource, resource_by_id_by_type)
+    resource_struct = ToEctoSchema.to_ecto_schema(resource, params, ecto_schema_module_by_type)
+    resource_ecto_schema_module = Map.fetch!(ecto_schema_module_by_type, resource.type)
+
+    # can't use Ecto.Changeset.cast as it doesn't work on belongs_to associations.
+    relationships
+    |> Relationships.to_ecto_schema(resource_by_id_by_type, ecto_schema_module_by_type)
+    |> Enum.reduce(resource_struct, fn ({string_name, relationship_ecto_schema}, acc) ->
+        key = String.to_existing_atom(string_name)
+
+        acc = case resource_ecto_schema_module.__schema__(:association, key) do
+          %Ecto.Association.BelongsTo{owner_key: owner_key} ->
+            Map.put(acc, owner_key, relationship_ecto_schema.id)
+          _ ->
+            acc
+        end
+
+        # see https://github.com/elixir-lang/elixir/blob/v1.2.3/lib/elixir/lib/kernel.ex#L1608-L1611
+        if :maps.is_key(key, acc) and key != :__struct__ do
+          :maps.put(key, relationship_ecto_schema, acc)
+        else
+          acc
+        end
+      end)
+  end
+
+  @doc """
+  Converts `resource` to params format used by
+  [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4).
+  The `id` and `attributes` are combined into a single map for params.
+
+      iex> Alembic.Resource.to_params(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{"text" => "First!"},
+      ...>     id: "1",
+      ...>     type: "post"
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "id" => "1",
+        "text" => "First!"
+      }
+
+  But, `id` won't show up as "id" in params if it is `nil`
+
+      iex> Alembic.Resource.to_params(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{"text" => "First!"},
+      ...>     type: "post"
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "text" => "First!"
+      }
+
+  ## Relationships
+
+  Relationships's params are merged into the `resource`'s params
+
+      iex> Alembic.Resource.to_params(
+      ...>   %Alembic.Resource{
+      ...>     attributes: %{"text" => "First!"},
+      ...>     relationships: %{
+      ...>       "author" => %Alembic.Relationship{
+      ...>         data: %Alembic.ResourceIdentifier{id: 1, type: "author"}
+      ...>       }
+      ...>     },
+      ...>     type: "post"
+      ...>   },
+      ...>   %{}
+      ...> )
+      %{
+        "text" => "First!",
+        "author" => %{
+          "id" => 1
+        }
+      }
+  """
+  @spec to_params(t, ToParams.resource_by_id_by_type) :: ToParams.params
+  def to_params(resource, attributes_by_id_by_type)
+
+  def to_params(%__MODULE__{attributes: attributes, id: id, relationships: relationships},
+                resource_by_id_by_type = %{}) do
+    params = case id do
+      nil ->
+        attributes
+      _ ->
+        Map.put(attributes, "id", id)
+    end
+
+    Map.merge(params, Relationships.to_params(relationships, resource_by_id_by_type))
   end
 
   ## Private Functions
