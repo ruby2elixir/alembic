@@ -152,7 +152,7 @@ defmodule Alembic.Fetch do
       }
 
   """
-  @spec to_query(t, map, Query.t) :: {:ok, Query.t} | {:error, Document.t}
+  @spec to_query(t, Includes.preload_by_include, Query.t) :: {:ok, Query.t} | {:error, Document.t}
   def to_query(fetch, preload_by_include, query)
 
   def to_query(%__MODULE__{includes: includes}, preload_by_include, query) do

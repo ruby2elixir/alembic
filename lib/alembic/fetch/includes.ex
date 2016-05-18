@@ -24,6 +24,10 @@ defmodule Alembic.Fetch.Includes do
 
   @type params :: %{}
 
+  @type preload :: term
+
+  @type preload_by_include :: %{include => preload}
+
   # Functions
 
   @doc """
@@ -190,7 +194,7 @@ defmodule Alembic.Fetch.Includes do
       }
 
   """
-  @spec to_preload(include, map) :: {:ok, term} | {:error, Document.t}
+  @spec to_preload(include, preload_by_include) :: {:ok, term} | {:error, Document.t}
   def to_preload(include, preload_by_include) do
     case Map.fetch(preload_by_include, include) do
       {:ok, preload} ->
@@ -341,7 +345,7 @@ defmodule Alembic.Fetch.Includes do
       }
 
   """
-  @spec to_preloads(t, map) :: {:ok, list} | {:error, Document.t}
+  @spec to_preloads(t, preload_by_include) :: {:ok, list} | {:error, Document.t}
   def to_preloads(includes, preload_by_include) do
     includes
     |> Stream.map(&to_preload(&1, preload_by_include))
@@ -425,8 +429,7 @@ defmodule Alembic.Fetch.Includes do
       }
 
   """
-  # prefer to keep this explicit that it is coming from Ecto
-  @spec to_query(t, map, Query.t) :: {:ok, Query.t} | {:error, Document.t}
+  @spec to_query(t, preload_by_include, Query.t) :: {:ok, Query.t} | {:error, Document.t}
   def to_query(includes, preload_by_include, query) do
     with {:ok, preloads} <- to_preloads(includes, preload_by_include) do
       {:ok, preloads_to_query(preloads, query)}
