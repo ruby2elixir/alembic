@@ -1,3 +1,13 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Alembic](#alembic)
+  - [Installation](#installation)
+  - [Contributing](#contributing)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Alembic
 
 [![CircleCI](https://circleci.com/gh/C-S-D/alembic.svg?style=svg)](https://circleci.com/gh/C-S-D/alembic)
