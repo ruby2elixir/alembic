@@ -3,8 +3,11 @@ machine:
     MIX_ENV: test
 dependencies:
   cache_directories:
-    - ../erlang-solutions
     - ../elixir
+    - ../erlang-solutions
+    - /home/ubuntu/.mix
+    - _build
+    - deps
   pre:
     - if [[ ! -e ../erlang-solutions ]]; then cd .. && wget http://packages.erlang-solutions.com/erlang-solutions_1.0_all.deb && mkdir erlang-solutions && mv erlang-solutions_1.0_all.deb erlang-solutions && cd -; fi
     - sudo dpkg -i /home/ubuntu/erlang-solutions/erlang-solutions_1.0_all.deb
@@ -15,6 +18,9 @@ dependencies:
     - mix local.hex --force && mix local.rebar --force
   post:
     - mix deps.get --only test
+    - mix compile
+    # generate plts so they are stored in cache of /home/ubuntu/.mix and _build
+    - mix dialyze --no-analyse
 test:
   override:
     - mix test --cover
