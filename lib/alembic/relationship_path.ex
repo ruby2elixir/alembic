@@ -7,9 +7,6 @@ defmodule Alembic.RelationshipPath do
 
   alias Alembic.Fetch.Includes
 
-  # Constants
-
-  @relationship_name_separator "."
 
   # Types
 
@@ -28,6 +25,11 @@ defmodule Alembic.RelationshipPath do
   @type t :: String.t
 
   # Functions
+
+  @doc """
+  Separator for `relationship_names` in a `relationship_path`
+  """
+  def relationship_name_separator, do: "."
 
   @doc """
   Breaks the `relationship_path` into `relationship_name`s in a nested map to form
@@ -51,7 +53,7 @@ defmodule Alembic.RelationshipPath do
   @spec to_include(t) :: Includes.include
   def to_include(relationship_path) do
     relationship_path
-    |> String.split(@relationship_name_separator)
+    |> String.split(relationship_name_separator)
     |> Enum.reverse
     |> Enum.reduce(fn (relationship_name, include) ->
          %{relationship_name => include}
