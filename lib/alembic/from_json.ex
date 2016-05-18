@@ -77,7 +77,7 @@ defmodule Alembic.FromJson do
   @typedoc """
   A single value that can be merged into a `collective_value`.
   """
-  @type singleton_value :: map | nil | String.t | struct
+  @type singleton_value :: [struct] | map | nil | String.t | struct
 
   # Callbacks
 
@@ -177,6 +177,46 @@ defmodule Alembic.FromJson do
       ...> )
       :error
 
+  If there is no member, and the `:member` map contains `required: true`, then an error will be returned that the member
+  is missing
+
+      iex> Alembic.FromJson.from_parent_json_to_field_result(
+      ...>   %{
+      ...>     field: :id,
+      ...>     member: %{
+      ...>       from_json: &Alembic.FromJson.string_from_json/2,
+      ...>       name: "id",
+      ...>       required: true
+      ...>     },
+      ...>     parent: %{
+      ...>       json: %{},
+      ...>       error_template: %Alembic.Error{
+      ...>         source: %Alembic.Source{
+      ...>           pointer: "/data/relationships/author"
+      ...>         }
+      ...>       }
+      ...>     }
+      ...>   }
+      ...> )
+      {
+        :error,
+        %Alembic.Document{
+          errors: [
+            %Alembic.Error{
+              detail: "`/data/relationships/author/id` is missing",
+              meta: %{
+                "child" => "id"
+              },
+              source: %Alembic.Source{
+                pointer: "/data/relationships/author"
+              },
+              status: "422",
+              title: "Child missing"
+            }
+          ]
+        }
+      }
+
   ### `nil` member value
 
   If there is a member, but it's value is `nil` (meaning it was `null` in the unparsed JSON) then `nil` will be passed
@@ -266,7 +306,7 @@ defmodule Alembic.FromJson do
 
   def from_parent_json_to_field_result(%{
                                          field: field_name,
-                                         member: %{name: member_name, from_json: from_json},
+                                         member: member = %{name: member_name, from_json: from_json},
                                          parent: %{json: parent_json, error_template: parent_error_template}
                                        }) do
     case Map.fetch(parent_json, member_name) do
@@ -277,7 +317,21 @@ defmodule Alembic.FromJson do
         |> from_json.(member_error_template)
         |> put_key(field_name)
       :error ->
-        :error
+        if Map.get(member, :required, false) do
+          {
+            :error,
+            # gets around circular reference if using %Document{} because from_json is implemented by Document and
+            # this needs to return a Document
+            struct(
+              Document,
+              errors: [
+                Error.missing(parent_error_template, member_name)
+              ]
+            )
+          }
+        else
+          :error
+        end
     end
   end
 

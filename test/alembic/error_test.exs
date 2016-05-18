@@ -6,7 +6,7 @@ defmodule Alembic.ErrorTest do
   use ExUnit.Case, async: true
 
   alias Alembic.Error
-  alias Alembic.FromJsonTest
+  alias Alembic.FromJsonCase
   alias Alembic.Source
 
   # Constants
@@ -48,7 +48,7 @@ defmodule Alembic.ErrorTest do
   # Private Functions
 
   defp assert_idempotent(original) do
-    FromJsonTest.assert_idempotent error_template: %Error{
+    FromJsonCase.assert_idempotent error_template: %Error{
                                                      source: %Source{
                                                        pointer: "/errors/0"
                                                      }
