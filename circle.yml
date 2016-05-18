@@ -14,12 +14,13 @@ dependencies:
     - ln -s /home/ubuntu/elixir/bin/* /home/ubuntu/bin
     - mix local.hex --force && mix local.rebar --force
   post:
-    - mix deps.get
+    - mix deps.get --only test
 test:
   override:
     - mix test --cover
   post:
     - mix credo --strict
+    - mix dialyze
     - mix inch.report
     - cp -a cover ${CIRCLE_ARTIFACTS}/
     - mkdir -p ${CIRCLE_TEST_REPORTS}/Elixir

@@ -46,7 +46,7 @@ defmodule Alembic.Mixfile do
       # test coverge tool.  Allow `--cover` option for `mix test`
       {:coverex, "~> 1.4", only: :test},
       # success type checker: ensures @type and @spec are valid
-      {:dialyze, "~> 0.2.1", only: :dev},
+      {:dialyze, "~> 0.2.1", only: [:dev, :test]},
       # markdown to HTML converter for ex_doc
       {:earmark, "~> 0.2.1", only: :dev},
       # documentation generation
