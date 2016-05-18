@@ -14,10 +14,12 @@ defmodule Alembic.Mixfile do
     [
       app: :alembic,
       build_embedded: Mix.env == :prod,
+      description: description,
       deps: deps,
       elixir: "~> 1.2",
       elixirc_paths: elixirc_paths(Mix.env),
       name: "Alembic",
+      package: package,
       source_url: "https://github.com/C-S-D/alembic",
       start_permanent: Mix.env == :prod,
       test_coverage: [tool: Coverex.Task],
@@ -57,6 +59,27 @@ defmodule Alembic.Mixfile do
     ]
   end
 
+  defp description do
+    """
+    A JSONAPI 1.0 library fully-tested against all jsonapi.org examples.  The library generates JSONAPI errors documents
+    whenever it encounters a malformed JSONAPI document, so that servers don't need to worry about JSONAPI format
+    errors.  Poison.Encoder implementations ensure the structs can be turned back into JSON strings:
+    struct->encoding->decoding->conversion to struct is tested to ensure idempotency and that the library
+    can parse its own JSONAPI errors documents.
+    """
+  end
+
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_),     do: ["lib"]
+
+  defp package do
+    [
+      licenses: ["Apache 2.0"],
+      links: %{
+        "Docs" => "https://hexdocs.pm/alembic",
+        "Github" => "https://github.com/C-S-D/alembic",
+      },
+      maintainers: ["Luke Imhoff"]
+    ]
+  end
 end
