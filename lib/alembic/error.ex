@@ -380,6 +380,59 @@ defmodule Alembic.Error do
   end
 
   @doc """
+  When a relationship path in `"includes"` params is unknown.
+
+  If no template is given, it is assumed that the source is the "include" parameter
+
+      iex> Alembic.Error.relationship_path("secret")
+      %Alembic.Error{
+        detail: "`secret` is an unknown relationship path",
+        meta: %{
+          "relationship_path" => "secret"
+        },
+        source: %Alembic.Source{
+          parameter: "include"
+        },
+        title: "Unknown relationship path"
+      }
+
+  If using a different parameter than recommended in the JSON API spec, a template can be used
+
+      iex> Alembic.Error.relationship_path(
+      ...>   %Alembic.Error{
+      ...>     source: %Alembic.Source{
+      ...>       parameter: "relationships"
+      ...>     }
+      ...>   },
+      ...>   "secret"
+      ...> )
+      %Alembic.Error{
+        detail: "`secret` is an unknown relationship path",
+        meta: %{
+          "relationship_path" => "secret"
+        },
+        source: %Alembic.Source{
+          parameter: "relationships"
+        },
+        title: "Unknown relationship path"
+      }
+
+  """
+  @spec relationship_path(String.t) :: t
+  @spec relationship_path(t, String.t) :: t
+  def relationship_path(template \\ %__MODULE__{source: %Source{parameter: "include"}}, unknown_relationship_path)
+  def relationship_path(%__MODULE__{source: source}, unknown_relationship_path) do
+    %__MODULE__{
+      detail: "`#{unknown_relationship_path}` is an unknown relationship path",
+      meta: %{
+        "relationship_path" => unknown_relationship_path
+      },
+      source: source,
+      title: "Unknown relationship path"
+    }
+  end
+
+  @doc """
   Error when the JSON type of the field is wrong.
 
   **NOTE: The *JSON* type should be used, not the Elixir/Erlang type, so if a member is not a `map` in Elixir, the
