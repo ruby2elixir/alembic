@@ -11,7 +11,6 @@ defmodule Alembic.Relationship do
   > </cite>
   """
 
-  alias Alembic
   alias Alembic.Document
   alias Alembic.Error
   alias Alembic.FromJson
@@ -61,8 +60,6 @@ defmodule Alembic.Relationship do
 
   # Types
 
-  @type resource_identifier :: %{String.t => String.t}
-
   @typedoc """
   > A "relationship object" **MUST** contain at least one of the following:
   >
@@ -82,9 +79,9 @@ defmodule Alembic.Relationship do
   > </cite>
   """
   @type t :: %__MODULE__{
-               data: [resource_identifier] | resource_identifier,
+               data: [ResourceIdentifier.t] | ResourceIdentifier.t,
                links: Links.links,
-               meta: Alembic.meta
+               meta: Meta.t
              }
 
   # Functions
