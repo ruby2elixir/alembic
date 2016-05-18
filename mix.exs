@@ -21,7 +21,7 @@ defmodule Alembic.Mixfile do
       source_url: "https://github.com/C-S-D/alembic",
       start_permanent: Mix.env == :prod,
       test_coverage: [tool: Coverex.Task],
-      version: "0.0.1"
+      version: "1.0.0"
     ]
   end
 
