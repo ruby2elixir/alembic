@@ -16,6 +16,7 @@ defmodule Alembic.Mixfile do
       build_embedded: Mix.env == :prod,
       description: description,
       deps: deps,
+      docs: docs,
       elixir: "~> 1.2",
       elixirc_paths: elixirc_paths(Mix.env),
       name: "Alembic",
@@ -69,11 +70,29 @@ defmodule Alembic.Mixfile do
     """
   end
 
+  defp docs do
+    [
+      extras: extras
+    ]
+  end
+
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_),     do: ["lib"]
 
+  defp extras do
+    [
+      "CHANGELOG.md",
+      "CODE_OF_CONDUCT.md",
+      "CONTRIBUTING.md",
+      "LICENSE.md",
+      "README.md",
+      "UPGRADING.md"
+    ]
+  end
+
   defp package do
     [
+      files: ["lib", "mix.exs" | extras],
       licenses: ["Apache 2.0"],
       links: %{
         "Docs" => "https://hexdocs.pm/alembic",
