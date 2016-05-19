@@ -284,10 +284,10 @@ defmodule Alembic.Link do
   ## Private Functions
 
   @spec href_from_json(nil, Error.t) :: {:ok, nil}
-  def href_from_json(nil, _), do: {:ok, nil}
+  defp href_from_json(nil, _), do: {:ok, nil}
 
   @spec href_from_json(String.t, Error.t) :: {:ok, String.t}
   # Alembic.json -- [nil, String.t]
   @spec href_from_json(true | false | list | float | integer | Alembic.json_object, Error.t) :: FromJson.error
-  def href_from_json(href, error_template), do: FromJson.string_from_json(href, error_template)
+  defp href_from_json(href, error_template), do: FromJson.string_from_json(href, error_template)
 end
