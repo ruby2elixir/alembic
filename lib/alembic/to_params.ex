@@ -35,4 +35,64 @@ defmodule Alembic.ToParams do
   * `[%{}]` - if a non-empty collection
   """
   @callback to_params(any, resource_by_id_by_type) :: params
+
+  # Functions
+
+  @doc """
+  Converts nested parameters for `belongs_to` associations to a foreign key parameter.
+
+      iex> Alembic.ToParams.nested_to_foreign_keys(
+      ...>   %{
+      ...>     "id" => 1,
+      ...>     "author" => %{
+      ...>       "id" => 2
+      ...>     },
+      ...>     "text" => "Welcome to my new blog!"
+      ...>   },
+      ...>   Alembic.TestPost
+      ...> )
+      %{
+        "id" => 1,
+        "author_id" => 2,
+        "text" => "Welcome to my new blog!"
+      }
+
+  """
+  @spec nested_to_foreign_keys(params, module) :: params
+  def nested_to_foreign_keys(nested_params, schema_module) do
+    :associations
+    |> schema_module.__schema__
+    |> Stream.map(&schema_module.__schema__(:association, &1))
+    |> Enum.reduce(
+         nested_params,
+         &reduce_nested_association_params_to_foreign_keys/2
+       )
+  end
+
+  ## Private Functions
+
+  defp reduce_nested_association_params_to_foreign_keys(
+         %Ecto.Association.BelongsTo{field: field, owner_key: owner_key, related_key: related_key},
+         acc
+       ) do
+    param_name = to_string(field)
+
+    case Map.fetch(acc, param_name) do
+      {:ok, association_params} ->
+        case Map.fetch(association_params, to_string(related_key)) do
+          {:ok, foreign_key_value} ->
+            foreign_key_param_name = to_string(owner_key)
+
+            acc
+            |> Map.delete(param_name)
+            |> Map.put(foreign_key_param_name, foreign_key_value)
+          :error ->
+            acc
+        end
+      :error ->
+        acc
+    end
+  end
+
+  defp reduce_nested_association_params_to_foreign_keys(_, acc), do: acc
 end
