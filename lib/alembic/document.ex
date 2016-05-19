@@ -77,6 +77,7 @@ defmodule Alembic.Document do
   defstruct data: :unset,
             errors: nil,
             included: nil,
+            jsonapi: nil,
             links: nil,
             meta: nil
 
@@ -1552,6 +1553,20 @@ defmodule Alembic.Document do
         ...>   }
         ...> )
         {:ok, "{\\"errors\\":[{\\"source\\":{\\"pointer\\":\\"\\"}}]}"}
+
+    ## JSONAPI
+
+    The JSONAPI version information can be set in the document and it will be encoded
+
+        iex> Poison.encode(
+        ...>   %Alembic.Document{
+        ...>     jsonapi: %{
+        ...>       "version" => "1.0"
+        ...>     },
+        ...>     data: nil
+        ...>   }
+        ...> )
+        {:ok, "{\\"jsonapi\\":{\\"version\\":\\"1.0\\"},\\"data\\":null}"}
 
     ## Meta
 
