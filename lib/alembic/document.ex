@@ -74,7 +74,11 @@ defmodule Alembic.Document do
 
   # Struct
 
-  defstruct ~w{data errors included links meta}a
+  defstruct data: :unset,
+            errors: nil,
+            included: nil,
+            links: nil,
+            meta: nil
 
   # Types
 
@@ -1518,8 +1522,6 @@ defmodule Alembic.Document do
   # Protocol Implementations
 
   defimpl Poison.Encoder do
-    alias Alembic.Document
-
     @doc """
     ## Data
 
@@ -1535,11 +1537,11 @@ defmodule Alembic.Document do
 
     ## Errors
 
-    When there are `errors`, a `nil` `data` is not encoded as `errors` are exclusive from `data`
+    When there are `errors`, an `:unset` `data` is not encoded as `errors` are exclusive from `data`
 
         iex> Poison.encode(
         ...>   %Alembic.Document{
-        ...>     data: nil,
+        ...>     data: :unset,
         ...>     errors: [
         ...>       %Alembic.Error{
         ...>         source: %Alembic.Source{
@@ -1549,21 +1551,19 @@ defmodule Alembic.Document do
         ...>     ]
         ...>   }
         ...> )
-        {:ok, "{\\"errors\\":[{\\"source\\":{\\"pointer\\":\\"\\"}}],\\"data\\":null}"}
+        {:ok, "{\\"errors\\":[{\\"source\\":{\\"pointer\\":\\"\\"}}]}"}
 
     ## Meta
 
-    Since `"meta"` can be sent with either `"data"` or `"errors"` and `"data"` can be `nil` for empty single resource,
-    to get an encoding with only `"meta"`, you need to use an option: `drop: [:data]`.
+    Since `"meta"` can be sent with either `"data"` or `"errors"` to get an encoding with only `"meta"`, you need
+    to have data in its default value, `:unset`.
 
         iex> Poison.encode(
         ...>   %Alembic.Document{
-        ...>     data: nil,
         ...>     meta: %{
         ...>       "copyright" => "2016"
         ...>     }
-        ...>   },
-        ...>   drop: [:data]
+        ...>   }
         ...> )
         {:ok, "{\\"meta\\":{\\"copyright\\":\\"2016\\"}}"}
 
@@ -1596,21 +1596,19 @@ defmodule Alembic.Document do
 
     """
 
-    def encode(%Document{data: data, errors: errors}, _) when not is_nil(data) and not is_nil(errors) do
+    def encode(%@for{data: data, errors: errors}, _) when data != :unset and not is_nil(errors) do
       raise ArgumentError,
             "`data` and `errors` is exclusive in JSON API, but both are set: data is `#{inspect data}` and errors " <>
             "is `#{inspect errors}`"
     end
 
-    def encode(document = %Document{}, options) do
-      # `data: nil` is allowed to be encoded as `"data": null` because `null` `"data"` is an empty single resource
+    def encode(document = %@for{}, options) do
+      # `data: nil` is allowed to be encoded as `"data": null` because `null` `"data"` is an empty single resource,
+      # so data field being unset is signalled with `:unset`
       map = for {field, value} <- Map.from_struct(document),
-                field == :data || value != nil,
+                (field == :data && value != :unset) || (field != :data && value != nil),
                 into: %{},
                 do: {field, value}
-
-      drop = Keyword.get(options, :drop, [])
-      map = Map.drop(map, drop)
 
       Poison.Encoder.Map.encode(map, options)
     end
