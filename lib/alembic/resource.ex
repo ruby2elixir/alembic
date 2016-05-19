@@ -995,11 +995,13 @@ defmodule Alembic.Resource do
 
   def to_params(%__MODULE__{attributes: attributes, id: id, relationships: relationships},
                 resource_by_id_by_type = %{}) do
+    params = attributes || %{}
+
     params = case id do
       nil ->
-        attributes
+        params
       _ ->
-        Map.put(attributes, "id", id)
+        Map.put(params, "id", id)
     end
 
     Map.merge(params, Relationships.to_params(relationships, resource_by_id_by_type))
